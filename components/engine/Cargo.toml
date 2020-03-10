@@ -44,6 +44,7 @@ features = ["nightly", "push", "process"]
 
 [dependencies.rocksdb]
 git = "https://github.com/tikv/rust-rocksdb.git"
+rev = "45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
 package = "rocksdb"
 
 [dev-dependencies]

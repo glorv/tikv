@@ -389,9 +389,9 @@ dependencies = [
 
 [[package]]
 name = "cache-size"
-version = "0.5.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81d993443a01668ca909379dac9de6e858121d7fb2bc16de939dc166164cac1c"
+checksum = "f9c0e5b187b377be086db3ee0de5cbf7bfb4a8c590b639af4d3facbdd07586ae"
 dependencies = [
  "raw-cpuid",
 ]
@@ -1475,6 +1475,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "grpcio"
+version = "0.5.0-alpha.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1463096cfc371772d59a48fbfc471e18892e197efc5867b3bd7c2e0428e97824"
+replace = "grpcio 0.5.0-alpha.5 (git+https://github.com/tikv/grpc-rs?rev=0bb4c6079a0c425b83e7df917a483580c555151d)"
+
+[[package]]
 name = "grpcio-compiler"
 version = "0.5.0-alpha.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1497,6 +1504,7 @@ dependencies = [
  "cc",
  "cmake",
  "libc",
+ "libz-sys",
  "openssl-sys",
  "pkg-config",
  "walkdir",
@@ -1831,7 +1839,7 @@ source = "git+https://github.com/pingcap/kvproto.git#2cf9a243b8d589f345de1dbaa9e
 dependencies = [
  "bytes 0.4.12",
  "futures 0.1.29",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "prost 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "prost-derive 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1896,7 +1904,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
+source = "git+https://github.com/tikv/rust-rocksdb.git?rev=45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e#45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -1914,7 +1922,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/tikv/rust-rocksdb.git#45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
+source = "git+https://github.com/tikv/rust-rocksdb.git?rev=45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e#45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -2509,7 +2517,7 @@ name = "pd_client"
 version = "0.1.0"
 dependencies = [
  "futures 0.1.29",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "kvproto",
  "lazy_static",
@@ -3396,7 +3404,7 @@ checksum = "cabe4fa914dec5870285fa7f71f602645da47c486e68486d2b4ceb4a343e90ac"
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
+source = "git+https://github.com/tikv/rust-rocksdb.git?rev=45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e#45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
 dependencies = [
  "libc",
  "librocksdb_sys",
@@ -3837,7 +3845,7 @@ dependencies = [
  "futures 0.1.29",
  "futures-executor",
  "futures-util",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "keys",
  "kvproto",
@@ -4052,7 +4060,7 @@ dependencies = [
  "engine_traits",
  "futures 0.1.29",
  "futures-cpupool",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "keys",
  "kvproto",
@@ -4128,7 +4136,7 @@ dependencies = [
  "futures 0.1.29",
  "futures 0.3.4",
  "futures-cpupool",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "keys",
  "kvproto",
@@ -4304,7 +4312,7 @@ dependencies = [
  "futures-executor",
  "futures-locks",
  "futures-util",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "hyper",
  "into_other",
@@ -4399,7 +4407,7 @@ dependencies = [
  "futures 0.3.4",
  "futures-cpupool",
  "fxhash",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "lazy_static",
  "libc",

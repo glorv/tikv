@@ -160,6 +160,7 @@ zipf = "5.0.1"
 "prost:0.5.0" = { git = "https://github.com/danburkert/prost", rev = "1944c27c3029d01ff216e7b126d846b6cf8c7d77" }
 "protobuf-build:0.10.0" = { git = "https://github.com/tikv/protobuf-build", rev="42e52b9311f7fb31bbbe089fef5a24ec0392f9ce" }
 "grpcio:0.5.0-alpha.5" = {git = "https://github.com/tikv/grpc-rs", rev="0bb4c6079a0c425b83e7df917a483580c555151d"}
+"rocksdb:0.1.0" = {git = "https://github.com/tikv/rust-rocksdb", rev="45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procinfo = { git = "https://github.com/tikv/procinfo-rs", rev = "5125fc1a69496b73b26b3c08b6e8afc3c665a56e" }
