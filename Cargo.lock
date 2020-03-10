@@ -202,7 +202,7 @@ dependencies = [
  "futures 0.1.29",
  "futures-executor",
  "futures-util",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "keys",
  "kvproto",
@@ -389,9 +389,9 @@ dependencies = [
 
 [[package]]
 name = "cache-size"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9c0e5b187b377be086db3ee0de5cbf7bfb4a8c590b639af4d3facbdd07586ae"
+checksum = "81d993443a01668ca909379dac9de6e858121d7fb2bc16de939dc166164cac1c"
 dependencies = [
  "raw-cpuid",
 ]
@@ -445,7 +445,7 @@ dependencies = [
  "fail",
  "failure",
  "futures 0.1.29",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvproto",
  "panic_hook",
  "pd_client",
@@ -560,7 +560,7 @@ dependencies = [
  "fs2",
  "futures 0.1.29",
  "futures-cpupool",
- "grpcio",
+ "grpcio 0.5.0-alpha.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2",
  "keys",
  "kvproto",
@@ -1463,8 +1463,7 @@ dependencies = [
 [[package]]
 name = "grpcio"
 version = "0.5.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1463096cfc371772d59a48fbfc471e18892e197efc5867b3bd7c2e0428e97824"
+source = "git+https://github.com/tikv/grpc-rs?rev=0bb4c6079a0c425b83e7df917a483580c555151d#0bb4c6079a0c425b83e7df917a483580c555151d"
 dependencies = [
  "bytes 0.4.12",
  "futures 0.1.29",
@@ -1492,8 +1491,7 @@ dependencies = [
 [[package]]
 name = "grpcio-sys"
 version = "0.5.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8aebf59fdf3668edf163c1948ceca64c4ebb733d71c9055a12219d336bd5d51"
+source = "git+https://github.com/tikv/grpc-rs?rev=0bb4c6079a0c425b83e7df917a483580c555151d#0bb4c6079a0c425b83e7df917a483580c555151d"
 dependencies = [
  "bindgen",
  "cc",
@@ -1898,7 +1896,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#b67becf9add951538ff2b54a83bbc0e906a8f566"
+source = "git+https://github.com/tikv/rust-rocksdb.git#45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
 dependencies = [
  "bindgen",
  "bzip2-sys",
