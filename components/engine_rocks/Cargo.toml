@@ -24,6 +24,7 @@ time = "0.1"
 [dependencies.rocksdb]
 git = "https://github.com/tikv/rust-rocksdb.git"
 package = "rocksdb"
+rev = "45ca78ebee15be2c731f17b5bcaf9d2c8e09b66e"
 
 [dependencies.prometheus]
 git = "https://github.com/tikv/rust-prometheus.git"
