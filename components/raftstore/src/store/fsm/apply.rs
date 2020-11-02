@@ -329,6 +329,8 @@ struct ApplyContext<W: WriteBatch + WriteBatchVecExt<RocksEngine>> {
 
     // TxnExtra collected from applied cmds.
     txn_extras: MustConsumeVec<TxnExtra>,
+    /// sst metas that should be ingest to rocksdb
+    ssts: Vec<SstMeta>,
 }
 
 impl<W: WriteBatch + WriteBatchVecExt<RocksEngine>> ApplyContext<W> {
@@ -365,6 +367,7 @@ impl<W: WriteBatch + WriteBatchVecExt<RocksEngine>> ApplyContext<W> {
             yield_duration: cfg.apply_yield_duration.0,
             perf_context_statistics: PerfContextStatistics::new(cfg.perf_level),
             txn_extras: MustConsumeVec::new("extra data from txn"),
+            ssts: vec![],
         }
     }
 
@@ -430,6 +433,14 @@ impl<W: WriteBatch + WriteBatchVecExt<RocksEngine>> ApplyContext<W> {
     /// If it returns true, all pending writes are persisted in engines.
     pub fn write_to_db(&mut self) -> bool {
         let need_sync = self.enable_sync_log && self.sync_log_hint;
+        if !self.ssts.is_empty() {
+            self.importer.ingest(&self.ssts, &self.engine).unwrap_or_else(|e| {
+                // If this failed, it means that the file is corrupted or something
+                // is wrong with the engine, but we can do nothing about that.
+                panic!("{} ingest {:?}: {:?}", self.tag, &self.ssts, e);
+            });
+            self.ssts.clear();
+        }
         if self.kv_wb.as_ref().map_or(false, |wb| !wb.is_empty()) {
             let mut write_opts = engine_traits::WriteOptions::new();
             write_opts.set_sync(need_sync);
@@ -1267,6 +1278,7 @@ impl ApplyDelegate {
         let exec_res = if !ranges.is_empty() {
             ApplyResult::Res(ExecResult::DeleteRange { ranges })
         } else if !ssts.is_empty() {
+            ctx.ssts.extend_from_slice(&ssts);
             ApplyResult::Res(ExecResult::IngestSst { ssts })
         } else {
             ApplyResult::None
@@ -1467,11 +1479,12 @@ impl ApplyDelegate {
             return Err(e);
         }
 
-        importer.ingest(sst, engine).unwrap_or_else(|e| {
-            // If this failed, it means that the file is corrupted or something
-            // is wrong with the engine, but we can do nothing about that.
-            panic!("{} ingest {:?}: {:?}", self.tag, sst, e);
-        });
+        // importer.ingest(sst, engine).unwrap_or_else(|e| {
+        //     // If this failed, it means that the file is corrupted or something
+        //     // is wrong with the engine, but we can do nothing about that.
+        //     panic!("{} ingest {:?}: {:?}", self.tag, sst, e);
+        // });
+
 
         ssts.push(sst.clone());
         Ok(Response::default())

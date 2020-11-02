@@ -1,6 +1,7 @@
 // Copyright 2018 TiKV Project Authors. Licensed under Apache-2.0.
 
 use std::borrow::Cow;
+use std::collections::hash_map::Entry;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
@@ -33,6 +34,7 @@ use txn_types::{is_short_value, Key, TimeStamp, Write as KvWrite, WriteRef, Writ
 
 use super::{Error, Result};
 use crate::metrics::*;
+use tikv_util::collections::HashMap;
 
 /// SSTImporter manages SST files that are waiting for ingesting.
 pub struct SSTImporter {
@@ -82,14 +84,14 @@ impl SSTImporter {
         }
     }
 
-    pub fn ingest<E: KvEngine>(&self, meta: &SstMeta, engine: &E) -> Result<()> {
-        match self.dir.ingest(meta, engine, self.key_manager.as_ref()) {
+    pub fn ingest<E: KvEngine>(&self, metas: &[SstMeta], engine: &E) -> Result<()> {
+        match self.dir.ingest(metas, engine, self.key_manager.as_ref()) {
             Ok(_) => {
-                info!("ingest"; "meta" => ?meta);
+                info!("ingest"; "meta" => ?metas);
                 Ok(())
             }
             Err(e) => {
-                error!(%e; "ingest failed"; "meta" => ?meta, );
+                error!(%e; "ingest failed"; "meta" => ?metas, );
                 Err(e)
             }
         }
@@ -608,34 +610,53 @@ impl ImportDir {
 
     fn ingest<E: KvEngine>(
         &self,
-        meta: &SstMeta,
+        metas: &[SstMeta],
         engine: &E,
         key_manager: Option<&Arc<DataKeyManager>>,
     ) -> Result<()> {
-        let start = Instant::now();
-        let path = self.join(meta)?;
-        let cf = meta.get_cf_name();
-        let cf = engine.cf_handle(cf).expect("bad cf name");
-        super::prepare_sst_for_ingestion(&path.save, &path.clone, key_manager)?;
-        let length = meta.get_length();
-        let crc32 = meta.get_crc32();
-        // FIXME perform validate_sst_for_ingestion after we can handle sst file size correctly.
-        // currently we can not handle sst file size after rewrite,
-        // we need re-compute length & crc32 and fill back to sstMeta.
-        if length != 0 && crc32 != 0 {
-            // we only validate if the length and CRC32 are explicitly provided.
-            engine.validate_sst_for_ingestion(cf, &path.clone, length, crc32)?;
-            IMPORTER_INGEST_BYTES.observe(length as _)
-        } else {
-            debug!("skipping SST validation since length and crc32 are both 0");
+        let mut sst_paths_by_cf: HashMap<&str, Vec<String>> = HashMap::default();
+        for meta in metas {
+            let path = self.join(meta)?;
+            let cf = meta.get_cf_name();
+            let cf_handle = engine.cf_handle(cf).expect("bad cf name");
+            super::prepare_sst_for_ingestion(&path.save, &path.clone, key_manager)?;
+            let length = meta.get_length();
+            let crc32 = meta.get_crc32();
+            // FIXME perform validate_sst_for_ingestion after we can handle sst file size correctly.
+            // currently we can not handle sst file size after rewrite,
+            // we need re-compute length & crc32 and fill back to sstMeta.
+            if length != 0 && crc32 != 0 {
+                // we only validate if the length and CRC32 are explicitly provided.
+                engine.validate_sst_for_ingestion(cf_handle, &path.clone, length, crc32)?;
+                IMPORTER_INGEST_BYTES.observe(length as _)
+            } else {
+                debug!("skipping SST validation since length and crc32 are both 0");
+            }
+            let sst_path = path.clone.to_str().unwrap().to_owned();
+            match sst_paths_by_cf.entry(cf) {
+                Entry::Occupied(mut e) => {
+                    e.get_mut().push(sst_path);
+                }
+                Entry::Vacant(mut v) => {
+                    v.insert(vec![sst_path]);
+                }
+            }
         }
 
         let mut opts = E::IngestExternalFileOptions::new();
         opts.move_files(true);
-        engine.ingest_external_file_cf(cf, &opts, &[path.clone.to_str().unwrap()])?;
-        IMPORTER_INGEST_DURATION
-            .with_label_values(&["ingest"])
-            .observe(start.elapsed().as_secs_f64());
+
+        for (cf, files) in sst_paths_by_cf {
+            let start = Instant::now();
+            let files_ref : Vec<&str> = files.iter().map(|f| f.as_str()).collect();
+            engine.ingest_external_file_cf(engine.cf_handle(cf).unwrap(), &opts, &files_ref)?;
+            let dur = start.elapsed().as_secs_f64();
+            info!("ingest sst files"; "count" => files.len(), "cost" => dur);
+            IMPORTER_INGEST_DURATION
+                .with_label_values(&["ingest"])
+                .observe(dur);
+        }
+
         Ok(())
     }
 
@@ -893,7 +914,7 @@ mod tests {
             f.append(&data).unwrap();
             f.finish().unwrap();
 
-            dir.ingest(&meta, &db, None).unwrap();
+            dir.ingest(&[meta], &db, None).unwrap();
             check_db_range(&db, range);
 
             ingested.push(meta);
@@ -1382,7 +1403,7 @@ mod tests {
 
             meta.set_length(0); // disable validation.
             meta.set_crc32(0);
-            importer.ingest(&meta, &db).unwrap();
+            importer.ingest(&[meta], &db).unwrap();
 
             // verifies the DB content is correct.
             let mut iter = db.iterator_cf(cf).unwrap();
