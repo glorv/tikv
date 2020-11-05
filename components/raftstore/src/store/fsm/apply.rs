@@ -410,19 +410,19 @@ impl<W: WriteBatch + WriteBatchVecExt<RocksEngine>> ApplyContext<W> {
     /// write the changes into rocksdb.
     ///
     /// This call is valid only when it's between a `prepare_for` and `finish_for`.
-    pub fn commit(&mut self, delegate: &mut ApplyDelegate) {
+    pub fn commit(&mut self, delegate: &mut ApplyDelegate, flush_ssts: bool) {
         if self.last_applied_index < delegate.apply_state.get_applied_index() {
             delegate.write_apply_state(self.kv_wb.as_mut().unwrap());
         }
         // last_applied_index doesn't need to be updated, set persistent to true will
         // force it call `prepare_for` automatically.
-        self.commit_opt(delegate, true);
+        self.commit_opt(delegate, true, flush_ssts);
     }
 
-    fn commit_opt(&mut self, delegate: &mut ApplyDelegate, persistent: bool) {
+    fn commit_opt(&mut self, delegate: &mut ApplyDelegate, persistent: bool, flush_ssts: bool) {
         delegate.update_metrics(self);
         if persistent {
-            self.write_to_db();
+            self.write_to_db(flush_ssts);
             self.prepare_for(delegate);
         }
         self.kv_wb_last_bytes = self.kv_wb().data_size() as u64;
@@ -431,9 +431,9 @@ impl<W: WriteBatch + WriteBatchVecExt<RocksEngine>> ApplyContext<W> {
 
     /// Writes all the changes into RocksDB.
     /// If it returns true, all pending writes are persisted in engines.
-    pub fn write_to_db(&mut self) -> bool {
+    pub fn write_to_db(&mut self, flush_ssts: bool) -> bool {
         let need_sync = self.enable_sync_log && self.sync_log_hint;
-        if !self.ssts.is_empty() {
+        if flush_ssts && !self.ssts.is_empty() {
             self.importer.ingest(&self.ssts, &self.engine).unwrap_or_else(|e| {
                 // If this failed, it means that the file is corrupted or something
                 // is wrong with the engine, but we can do nothing about that.
@@ -482,7 +482,7 @@ impl<W: WriteBatch + WriteBatchVecExt<RocksEngine>> ApplyContext<W> {
         if !delegate.pending_remove {
             delegate.write_apply_state(self.kv_wb.as_mut().unwrap());
         }
-        self.commit_opt(delegate, false);
+        self.commit_opt(delegate, false, true);
         self.apply_res.push(ApplyRes {
             region_id: delegate.region_id(),
             apply_state: delegate.apply_state.clone(),
@@ -524,7 +524,7 @@ impl<W: WriteBatch + WriteBatchVecExt<RocksEngine>> ApplyContext<W> {
         // take raft log gc for example, we write kv WAL first, then write raft WAL,
         // if power failure happen, raft WAL may synced to disk, but kv WAL may not.
         // so we use sync-log flag here.
-        let is_synced = self.write_to_db();
+        let is_synced = self.write_to_db(true);
 
         if !self.apply_res.is_empty() {
             for res in self.apply_res.drain(..) {
@@ -881,7 +881,7 @@ impl ApplyDelegate {
             let cmd = util::parse_data_at(data, index, &self.tag);
 
             if should_write_to_engine(&cmd) || apply_ctx.kv_wb().should_write_to_engine() {
-                apply_ctx.commit(self);
+                apply_ctx.commit(self, false);
                 if let Some(start) = self.handle_start.as_ref() {
                     if start.elapsed() >= apply_ctx.yield_duration {
                         return ApplyResult::Yield;
@@ -2888,7 +2888,7 @@ impl ApplyFsm {
             Ok(()) => {
                 // Commit the writebatch for ensuring the following snapshot can get all previous writes.
                 if apply_ctx.kv_wb.is_some() && apply_ctx.kv_wb().count() > 0 {
-                    apply_ctx.commit(&mut self.delegate);
+                    apply_ctx.commit(&mut self.delegate, true);
                 }
                 ReadResponse {
                     response: Default::default(),
