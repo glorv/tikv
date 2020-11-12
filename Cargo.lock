@@ -1993,15 +1993,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "librocksdb_cloud_sys"
+version = "0.1.0"
+source = "git+https://github.com/Connor1996/rust-rocksdb.git?branch=ingest-log#9c101544d55e3a36efd94b88446a5164d9448bed"
+dependencies = [
+ "cc",
+ "cmake",
+]
+
+[[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git?branch=tikv-4.x#cf9871d8cd9eb29cd27cc614ede34f0e28f78916"
+source = "git+https://github.com/Connor1996/rust-rocksdb.git?branch=ingest-log#9c101544d55e3a36efd94b88446a5164d9448bed"
 dependencies = [
  "bindgen",
  "bzip2-sys",
  "cc",
  "cmake",
  "libc",
+ "librocksdb_cloud_sys",
  "libtitan_sys",
  "libz-sys",
  "lz4-sys",
@@ -2014,7 +2024,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/tikv/rust-rocksdb.git?branch=tikv-4.x#cf9871d8cd9eb29cd27cc614ede34f0e28f78916"
+source = "git+https://github.com/Connor1996/rust-rocksdb.git?branch=ingest-log#9c101544d55e3a36efd94b88446a5164d9448bed"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -2085,8 +2095,9 @@ dependencies = [
 
 [[package]]
 name = "lz4-sys"
-version = "1.8.3"
-source = "git+https://github.com/busyjay/lz4-rs.git?branch=adjust-build#5a8afe4010c67899fc7af876a58d67fd6269bf81"
+version = "1.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dca79aa95d8b3226213ad454d328369853be3a1382d89532a854f4d69640acae"
 dependencies = [
  "cc",
  "libc",
@@ -3432,7 +3443,7 @@ checksum = "cabe4fa914dec5870285fa7f71f602645da47c486e68486d2b4ceb4a343e90ac"
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git?branch=tikv-4.x#cf9871d8cd9eb29cd27cc614ede34f0e28f78916"
+source = "git+https://github.com/Connor1996/rust-rocksdb.git?branch=ingest-log#9c101544d55e3a36efd94b88446a5164d9448bed"
 dependencies = [
  "libc",
  "librocksdb_sys",

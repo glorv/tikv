@@ -35,13 +35,13 @@ impl MiscExt for RocksEngine {
         include_end: bool,
     ) -> Result<()> {
         if self.as_inner().is_titan() {
-            let handle = util::get_cf_handle(self.as_inner(), cf)?;
-            self.as_inner().delete_blob_files_in_range_cf(
-                handle,
-                start_key,
-                end_key,
-                include_end,
-            )?;
+            // let handle = util::get_cf_handle(self.as_inner(), cf)?;
+            // self.as_inner().delete_blob_files_in_range_cf(
+            //     handle,
+            //     start_key,
+            //     end_key,
+            //     include_end,
+            // )?;
         }
 
         Ok(())
