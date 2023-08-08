@@ -22,6 +22,7 @@ use getset::{CopyGetters, Setters};
 use num_traits::cast::{AsPrimitive, FromPrimitive};
 use rand::Rng;
 use tikv_util::{
+    info,
     sys::thread::StdThreadBuildWrapper,
     time::{Instant, Limiter},
 };
@@ -827,6 +828,7 @@ impl<E: FlowControlFactorStore + Send + 'static> FlowChecker<E> {
                 .with_label_values(&[cf, "memtable_init"])
                 .inc();
             let x = self.write_flow_recorder.get_percentile_90();
+            info!("add txn flow control"; "region" => self.region_id, "type" => "memtable", "limit" => x);
             if x == 0 {
                 f64::INFINITY
             } else {
@@ -837,6 +839,7 @@ impl<E: FlowControlFactorStore + Send + 'static> FlowChecker<E> {
         } else if is_throttled && (!should_throttle || num_memtables < self.memtables_threshold) {
             // should not throttle memtable
             if checker.memtable_init_speed {
+                info!("remove txn flow control"; "region" => self.region_id, "type" => "memtable");
                 checker.memtable_init_speed = false;
                 f64::INFINITY
             } else {
@@ -981,11 +984,14 @@ impl<E: FlowControlFactorStore + Send + 'static> FlowChecker<E> {
             } else {
                 self.last_speed
             };
+            info!("add txn flow control"; "region" => self.region_id, "type" => "l0", "limit" => x);
             if x < f64::EPSILON { f64::INFINITY } else { x }
         } else if is_throttled && should_throttle {
+            info!("update txn flow control"; "region" => self.region_id, "type" => "l0", "limit" => self.limiter.speed_limit() * K_INC_SLOWDOWN_RATIO);
             self.limiter.speed_limit() * K_INC_SLOWDOWN_RATIO
         } else if is_throttled && !should_throttle {
             self.last_speed = self.limiter.speed_limit() * K_DEC_SLOWDOWN_RATIO;
+            info!("remove txn flow control"; "region" => self.region_id, "type" => "l0");
             f64::INFINITY
         } else {
             f64::INFINITY
