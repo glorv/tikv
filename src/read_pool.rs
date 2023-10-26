@@ -26,6 +26,7 @@ use tikv_util::{
     worker::{Runnable, RunnableWithTimer, Scheduler, Worker},
     yatp_pool::{self, CleanupMethod, FuturePool, PoolTicker, YatpPoolBuilder},
 };
+use thread_priority::{set_current_thread_priority, ThreadPriority, ScheduleParams};
 use tracker::TrackedFuture;
 use yatp::{
     metrics::MULTILEVEL_LEVEL_ELAPSED, pool::Remote, queue::Extras, task::future::TaskCell,
@@ -55,7 +56,7 @@ pub enum ReadPool {
         read_pool_low: FuturePool,
     },
     Yatp {
-        pool: yatp::ThreadPool<TaskCell>,
+        pools: [yatp::ThreadPool<TaskCell>; 3],
         running_tasks: IntGauge,
         running_threads: IntGauge,
         max_tasks: usize,
@@ -78,7 +79,7 @@ impl ReadPool {
                 read_pool_low: read_pool_low.clone(),
             },
             ReadPool::Yatp {
-                pool,
+                pools,
                 running_tasks,
                 running_threads,
                 max_tasks,
@@ -86,7 +87,7 @@ impl ReadPool {
                 resource_ctl,
                 time_slice_inspector,
             } => ReadPoolHandle::Yatp {
-                remote: pool.remote().clone(),
+                remotes: std::array::from_fn(|i| pools[i].remote().clone()),
                 running_tasks: running_tasks.clone(),
                 running_threads: running_threads.clone(),
                 max_tasks: *max_tasks,
@@ -106,7 +107,7 @@ pub enum ReadPoolHandle {
         read_pool_low: FuturePool,
     },
     Yatp {
-        remote: Remote<TaskCell>,
+        remotes: [Remote<TaskCell>; 3],
         running_tasks: IntGauge,
         running_threads: IntGauge,
         max_tasks: usize,
@@ -120,10 +121,11 @@ impl ReadPoolHandle {
     pub fn spawn<F>(
         &self,
         f: F,
-        priority: CommandPri,
+        command_priority: CommandPri,
         task_id: u64,
         metadata: TaskMetadata<'_>,
         resource_limiter: Option<Arc<ResourceLimiter>>,
+        task_priority: Option<usize>,
     ) -> Result<(), ReadPoolError>
     where
         F: Future<Output = ()> + Send + 'static,
@@ -134,7 +136,7 @@ impl ReadPoolHandle {
                 read_pool_normal,
                 read_pool_low,
             } => {
-                let pool = match priority {
+                let pool = match command_priority {
                     CommandPri::High => read_pool_high,
                     CommandPri::Normal => read_pool_normal,
                     CommandPri::Low => read_pool_low,
@@ -143,7 +145,7 @@ impl ReadPoolHandle {
                 pool.spawn(f)?;
             }
             ReadPoolHandle::Yatp {
-                remote,
+                remotes,
                 running_tasks,
                 max_tasks,
                 resource_ctl,
@@ -159,11 +161,13 @@ impl ReadPoolHandle {
                 }
 
                 running_tasks.inc();
-                let fixed_level = match priority {
+                let fixed_level = match command_priority {
                     CommandPri::High => Some(0),
                     CommandPri::Normal => None,
                     CommandPri::Low => Some(2),
                 };
+                let priority = task_priority.unwrap_or(1);
+                assert!(priority < remotes.len());
                 let group_name = metadata.group_name().to_owned();
                 let mut extras = Extras::new_multilevel(task_id, fixed_level);
                 extras.set_metadata(metadata.to_vec());
@@ -191,7 +195,7 @@ impl ReadPoolHandle {
                         extras,
                     )
                 };
-                remote.spawn(task_cell);
+                remotes[priority].spawn(task_cell);
             }
         }
         Ok(())
@@ -204,6 +208,7 @@ impl ReadPoolHandle {
         task_id: u64,
         metadata: TaskMetadata<'_>,
         resource_limiter: Option<Arc<ResourceLimiter>>,
+        task_priority: Option<usize>,
     ) -> impl Future<Output = Result<T, ReadPoolError>>
     where
         F: Future<Output = T> + Send + 'static,
@@ -219,6 +224,7 @@ impl ReadPoolHandle {
             task_id,
             metadata,
             resource_limiter,
+            task_priority,
         );
         async move {
             res?;
@@ -254,13 +260,13 @@ impl ReadPoolHandle {
                 unreachable!()
             }
             ReadPoolHandle::Yatp {
-                remote,
+                remotes,
                 running_threads,
                 max_tasks,
                 pool_size,
                 ..
             } => {
-                remote.scale_workers(max_thread_count);
+                remotes.iter().for_each(|r| r.scale_workers(max_thread_count));
                 *max_tasks = max_tasks
                     .saturating_div(*pool_size)
                     .saturating_mul(max_thread_count);
@@ -441,6 +447,36 @@ pub fn build_yatp_read_pool<E: Engine, R: FlowStatsReporter>(
     )
 }
 
+fn yatp_builder<E: Engine, R: FlowStatsReporter>(
+    config: &UnifiedReadPoolConfig,
+    _raftkv: &Arc<Mutex<E>>,
+    reporter: R,
+    cleanup_method: CleanupMethod,
+    unified_read_pool_name: &str,
+    suffix: &str,
+) -> YatpPoolBuilder<ReporterTicker<R>> {
+    let pool_name = format!("{}-{}", unified_read_pool_name, suffix);
+    YatpPoolBuilder::new(ReporterTicker { reporter })
+    .name_prefix(&pool_name)
+    .cleanup_method(cleanup_method)
+    .stack_size(config.stack_size.0 as usize)
+    .thread_count(
+        config.min_thread_count,
+        config.max_thread_count,
+        std::cmp::max(
+            std::cmp::max(
+                UNIFIED_READPOOL_MIN_CONCURRENCY,
+                SysQuota::cpu_cores_quota() as usize,
+            ),
+            config.max_thread_count,
+        ),
+    )
+    .before_stop(|| unsafe {
+        destroy_tls_engine::<E>();
+    })
+}
+
+
 pub fn build_yatp_read_pool_with_name<E: Engine, R: FlowStatsReporter>(
     config: &UnifiedReadPoolConfig,
     reporter: R,
@@ -450,37 +486,51 @@ pub fn build_yatp_read_pool_with_name<E: Engine, R: FlowStatsReporter>(
     unified_read_pool_name: String,
 ) -> ReadPool {
     let raftkv = Arc::new(Mutex::new(engine));
-    let builder = YatpPoolBuilder::new(ReporterTicker { reporter })
-        .name_prefix(&unified_read_pool_name)
-        .cleanup_method(cleanup_method)
-        .stack_size(config.stack_size.0 as usize)
-        .thread_count(
-            config.min_thread_count,
-            config.max_thread_count,
-            std::cmp::max(
-                std::cmp::max(
-                    UNIFIED_READPOOL_MIN_CONCURRENCY,
-                    SysQuota::cpu_cores_quota() as usize,
-                ),
-                config.max_thread_count,
-            ),
-        )
-        .after_start(move || {
-            let engine = raftkv.lock().unwrap().clone();
-            set_tls_engine(engine);
-            set_io_type(IoType::ForegroundRead);
-        })
-        .before_stop(|| unsafe {
-            destroy_tls_engine::<E>();
-        });
-    let pool = if let Some(ref r) = resource_ctl {
-        builder.build_priority_pool(r.clone())
+    let pools = if let Some(ref r) = resource_ctl {
+        let r1 = raftkv.clone();
+        let high = yatp_builder(config, &raftkv, reporter.clone(), cleanup_method.clone(), &unified_read_pool_name, "high")
+            .after_start(move || {
+                let engine = r1.lock().unwrap().clone();
+                set_tls_engine(engine);
+                set_io_type(IoType::ForegroundRead);
+                thread_priority::set_thread_priority_and_policy(thread_priority::thread_native_id(), ThreadPriority::from_posix(ScheduleParams { sched_priority: 76 }), thread_priority::ThreadSchedulePolicy::Realtime(thread_priority::RealtimeThreadSchedulePolicy::Fifo)).unwrap();
+                //set_current_thread_priority(ThreadPriority::from_posix(ScheduleParams { sched_priority: priority as libc::c_int })).unwrap();
+            });
+        let r2 = raftkv.clone();
+        let medium = yatp_builder(config, &raftkv, reporter.clone(), cleanup_method.clone(), &unified_read_pool_name, "medium")
+            .after_start(move || {
+                let engine = r2.lock().unwrap().clone();
+                set_tls_engine(engine);
+                set_io_type(IoType::ForegroundRead);
+                //thread_priority::set_thread_priority_and_policy(thread_priority::thread_native_id(), ThreadPriority::from_posix(ScheduleParams { sched_priority: priority as libc::c_int }), thread_priority::ThreadSchedulePolicy::Realtime(thread_priority::RealtimeThreadSchedulePolicy::Fifo))
+                set_current_thread_priority(ThreadPriority::from_posix(ScheduleParams { sched_priority: 51 })).unwrap();
+            });
+        let r3 = raftkv.clone();
+        let low = yatp_builder(config, &raftkv, reporter.clone(), cleanup_method.clone(), &unified_read_pool_name, "low")
+            .after_start(move || {
+                let engine = r3.lock().unwrap().clone();
+                set_tls_engine(engine);
+                set_io_type(IoType::ForegroundRead);
+                // let tid = thread_priority::thread_native_id();
+                // let params = libc::sched_param { sched_priority: 25 };
+                // let params_ptr: *const libc::sched_param = &params;
+                // unsafe {
+                //     libc::sched_setscheduler(tid as i64 as i32, libc::SCHED_IDLE, params_ptr).unwrap();
+                // }
+                set_current_thread_priority(ThreadPriority::from_posix(ScheduleParams { sched_priority: 99 })).unwrap();
+            });
+        [high, medium, low].map(|b| b.build_priority_pool(r.clone()))
+        
+        // map the crossplatform priority to linux nice value
+        // 25 --> -10, 51 --> 0, 76 --> 10
+        //[25, 51, 76].map(|p|yatp_builder(config, reporter.clone(), raftkv.clone(), cleanup_method.clone(), &unified_read_pool_name, p).build_priority_pool(r.clone()))
+        //[51, 76, 99].map(|p|yatp_builder(config, reporter.clone(), raftkv.clone(), cleanup_method.clone(), &unified_read_pool_name, p).build_priority_pool(r.clone()))
     } else {
-        builder.build_multi_level_pool()
+        std::array::from_fn(|_|yatp_builder(config, &raftkv, reporter.clone(), cleanup_method.clone(), &unified_read_pool_name, "").build_multi_level_pool())
     };
     let time_slice_inspector = Arc::new(TimeSliceInspector::new(&unified_read_pool_name));
     ReadPool::Yatp {
-        pool,
+        pools,
         running_tasks: UNIFIED_READ_POOL_RUNNING_TASKS
             .with_label_values(&[&unified_read_pool_name]),
         running_threads: UNIFIED_READ_POOL_RUNNING_THREADS

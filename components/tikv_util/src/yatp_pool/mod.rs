@@ -53,6 +53,7 @@ where
 /// so that the pool can adjust the level of a task according to its running
 /// time. To prevent a task-elapsed map from growing too large, the following
 /// strategies are provided for cleaning up it periodically.
+#[derive(Clone)]
 pub enum CleanupMethod {
     /// Cleanup in place on spawning.
     InPlace,

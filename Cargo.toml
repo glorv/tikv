@@ -138,6 +138,7 @@ sync_wrapper = "0.1.1"
 sysinfo = "0.26"
 tempfile = "3.0"
 thiserror = "1.0"
+thread-priority = "=0.13.1"
 tidb_query_aggr = { workspace = true }
 tidb_query_common = { workspace = true }
 tidb_query_datatype = { workspace = true }
@@ -207,9 +208,6 @@ procinfo = { git = "https://github.com/tikv/procinfo-rs", rev = "7693954bd1dd86e
 # After the PR to rust-rocksdb is merged, remember to comment this out and run `cargo update -p rocksdb`.
 # [patch.'https://github.com/tikv/rust-rocksdb']
 # rocksdb = { git = "https://github.com/your_github_id/rust-rocksdb", branch = "your_branch" }
-
-[patch.'https://github.com/tikv/yatp']
-yatp = { git = "https://github.com/glorv/yatp", branch = "prioirty-reschedule" }
 
 [workspace]
 # See https://github.com/rust-lang/rfcs/blob/master/text/2957-cargo-features2.md

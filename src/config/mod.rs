@@ -2239,7 +2239,7 @@ impl UnifiedReadPoolConfig {
         }
         let limit = cmp::max(
             UNIFIED_READPOOL_MIN_CONCURRENCY,
-            SysQuota::cpu_cores_quota() as usize * 10, // at most 10 threads per core
+            SysQuota::cpu_cores_quota() as usize, // at most 10 threads per core
         );
         if self.max_thread_count > limit {
             return Err(format!(

@@ -611,6 +611,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let resource_tag = self.resource_tag_factory.new_tag_with_key_ranges(
             &ctx,
@@ -754,6 +757,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -784,6 +788,10 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 requests[0].get_context().get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(requests[0]
+            .get_context()
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let concurrency_manager = self.concurrency_manager.clone();
         let api_version = self.api_version;
         let busy_threshold =
@@ -962,6 +970,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -985,6 +994,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let key_ranges = keys
             .iter()
@@ -1148,6 +1160,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -1177,6 +1190,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let resource_tag = self.resource_tag_factory.new_tag_with_key_ranges(
             &ctx,
@@ -1333,6 +1349,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -1353,6 +1370,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let resource_tag = self.resource_tag_factory.new_tag_with_key_ranges(
             &ctx,
@@ -1487,6 +1507,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         );
         async move {
             res.map_err(|_| Error::from(ErrorInner::SchedTooBusy))
@@ -1669,6 +1690,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let resource_tag = self
             .resource_tag_factory
@@ -1738,6 +1762,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -1761,6 +1786,10 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 gets[0].get_context().get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(gets[0]
+            .get_context()
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let api_version = self.api_version;
         let busy_threshold = Duration::from_millis(gets[0].get_context().busy_threshold_ms as u64);
@@ -1883,6 +1912,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -1902,6 +1932,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let key_ranges = keys.iter().map(|k| (k.clone(), k.clone())).collect();
         let resource_tag = self
@@ -1989,6 +2022,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -2408,6 +2442,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let resource_tag = self.resource_tag_factory.new_tag(&ctx);
         let api_version = self.api_version;
@@ -2523,6 +2560,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -2545,6 +2583,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let key_ranges = ranges
             .iter()
@@ -2688,6 +2729,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -2707,6 +2749,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let resource_tag = self
             .resource_tag_factory
@@ -2776,6 +2821,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         )
     }
 
@@ -2888,6 +2934,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 ctx.get_request_source(),
             )
         });
+        let task_priority = self.resource_manager.as_ref().map(|r| r.get_group_priority(ctx
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let priority_tag = get_priority_tag(priority);
         let key_ranges = ranges
             .iter()
@@ -2967,6 +3016,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             thread_rng().next_u64(),
             metadata,
             resource_limiter,
+            task_priority,
         );
 
         async move {
@@ -2983,6 +3033,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         task_id: u64,
         metadata: TaskMetadata<'_>,
         resource_limiter: Option<Arc<ResourceLimiter>>,
+        task_priority: Option<usize>,
     ) -> impl Future<Output = Result<T>>
     where
         Fut: Future<Output = Result<T>> + Send + 'static,
@@ -2995,7 +3046,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         }
         Either::Right(
             self.read_pool
-                .spawn_handle(future, priority, task_id, metadata, resource_limiter)
+                .spawn_handle(future, priority, task_id, metadata, resource_limiter, task_priority)
                 .map_err(|_| Error::from(ErrorInner::SchedTooBusy))
                 .and_then(|res| future::ready(res)),
         )

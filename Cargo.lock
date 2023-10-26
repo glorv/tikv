@@ -6359,6 +6359,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread-priority"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c56ce92f1285eaaa11fc1a3201e25de97898c50e87caa4c2aee836fe05288de"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "libc 0.2.146",
+ "log",
+ "rustversion",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "thread_local"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6631,6 +6645,7 @@ dependencies = [
  "test_sst_importer",
  "test_util",
  "thiserror",
+ "thread-priority",
  "tidb_query_aggr",
  "tidb_query_common",
  "tidb_query_datatype",
@@ -7740,7 +7755,7 @@ checksum = "541b12c998c5b56aa2b4e6f18f03664eef9a4fd0a246a55594efae6cc2d964b5"
 [[package]]
 name = "yatp"
 version = "0.0.1"
-source = "git+https://github.com/glorv/yatp?branch=prioirty-reschedule#d2e6b52fe064291bd94ade8a24a64444a9c68073"
+source = "git+https://github.com/tikv/yatp.git?branch=master#793be4d789d4bd15292fe4d06e38063b4ec9d48e"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-skiplist",

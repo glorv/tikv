@@ -513,6 +513,10 @@ impl<E: Engine> Endpoint<E> {
                 req_ctx.context.get_request_source(),
             )
         });
+        let task_priority = self.resource_ctl.as_ref().map(|r| r.get_group_priority(req_ctx
+            .context
+            .get_resource_control_context()
+            .get_resource_group_name()));
         // box the tracker so that moving it is cheap.
         let tracker = Box::new(Tracker::new(req_ctx, self.slow_log_threshold));
 
@@ -525,6 +529,7 @@ impl<E: Engine> Endpoint<E> {
                 task_id,
                 metadata,
                 resource_limiter,
+                task_priority,
             )
             .map_err(|_| Error::MaxPendingTasksExceeded);
         async move { res.await? }
@@ -758,6 +763,10 @@ impl<E: Engine> Endpoint<E> {
                 req_ctx.context.get_request_source(),
             )
         });
+        let task_priority = self.resource_ctl.as_ref().map(|r| r.get_group_priority(req_ctx
+            .context
+            .get_resource_control_context()
+            .get_resource_group_name()));
         let key_ranges = req_ctx
             .ranges
             .iter()
@@ -782,6 +791,7 @@ impl<E: Engine> Endpoint<E> {
                 task_id,
                 metadata,
                 resource_limiter,
+                task_priority,
             )
             .map_err(|_| Error::MaxPendingTasksExceeded)?;
         Ok(rx)

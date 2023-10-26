@@ -234,6 +234,30 @@ impl ResourceGroupManager {
         }
     }
 
+    fn to_priority_value(p: u32) -> usize {
+        if p == 0 {
+            1
+        } else {
+            // HIGH(15) --> 0
+            // MEDIUM(8) --> 1
+            // LOW(1) --> 2
+            (17 - p as usize) / 8
+        }
+    }
+
+    pub fn get_group_priority(
+        &self,
+        rg: &str,
+    ) -> usize {
+        if let Some(group) = self.resource_groups.get(rg) {
+            return Self::to_priority_value(group.group.priority);
+        }
+
+        self.resource_groups
+            .get(DEFAULT_RESOURCE_GROUP_NAME)
+            .map_or(1, |g| Self::to_priority_value(g.group.priority))
+    }
+
     pub fn get_resource_limiter(
         &self,
         rg: &str,
