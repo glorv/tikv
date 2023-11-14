@@ -15,7 +15,7 @@ use tikv_util::{
     debug,
     sys::{cpu_time::ProcessStat, SysQuota},
     time::Instant,
-    warn,
+    warn, info,
     yatp_pool::metrics::YATP_POOL_SCHEDULE_WAIT_DURATION_VEC,
 };
 
@@ -419,6 +419,7 @@ impl<R: ResourceStatsProvider> PriorityLimiterAdjustWorker<R> {
         let expect_pool_cpu_total = real_cpu_total * (process_cpu_stats.total_quota * 0.95)
             / process_cpu_stats.current_used;
         let mut limits = [0.0; 2];
+        let cpu_duration: [_; 3] = std::array::from_fn(|i| stats[i].cpu_secs);
         let level_expected: [_; 3] =
             std::array::from_fn(|i| stats[i].cpu_secs + stats[i].wait_secs);
         // substract the cpu time usage for priority high.
@@ -442,7 +443,7 @@ impl<R: ResourceStatsProvider> PriorityLimiterAdjustWorker<R> {
             limits[i - 1] = limit;
             expect_cpu_time_total -= level_expected[i];
         }
-        debug!("adjsut cpu limiter by priority"; "cpu_quota" => process_cpu_stats.total_quota, "process_cpu" => process_cpu_stats.current_used, "expected_cpu" => ?level_expected,
+        info!("adjsut cpu limiter by priority"; "cpu_quota" => process_cpu_stats.total_quota, "process_cpu" => process_cpu_stats.current_used, "level_cpu_cost" => ?cpu_duration, "expected_cpu" => ?level_expected,
             "limits" => ?limits, "limit_cpu_total" => expect_pool_cpu_total, "pool_cpu_cost" => real_cpu_total);
     }
 }
@@ -518,10 +519,12 @@ impl PriorityLimiterStatsTracker {
         let wait_stats: [_; 2] =
             std::array::from_fn(|i| self.task_wait_dur_trakcers[i].get_and_upate_statistics());
         let schedule_wait_dur_secs = wait_stats.iter().map(|s| s.0).sum::<f64>() / dur_secs;
+        let expected_wait_dur_secs = stats_delta.request_count as f64 * 0.000_005;
+        let normed_schedule_wait_dur_secs = (schedule_wait_dur_secs - expected_wait_dur_secs).max(0.0);
         LimiterStats {
             cpu_secs: stats_delta.total_consumed as f64 / MICROS_PER_SEC,
             wait_secs: stats_delta.total_wait_dur_us as f64 / MICROS_PER_SEC
-                + schedule_wait_dur_secs,
+                + normed_schedule_wait_dur_secs,
             req_count: stats_delta.request_count,
         }
     }

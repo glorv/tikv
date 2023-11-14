@@ -19,7 +19,7 @@ use crate::{
     resource_limiter::{ResourceLimiter, ResourceType},
 };
 
-const MAX_WAIT_DURATION: Duration = Duration::from_secs(10);
+const MAX_WAIT_DURATION: Duration = Duration::from_millis(100);
 
 #[pin_project]
 pub struct ControlledFuture<F> {
