@@ -13,8 +13,7 @@ use tikv_util::{time::Limiter, timer::GLOBAL_TIMER_HANDLE};
 
 use crate::metrics::BACKGROUND_TASKS_WAIT_DURATION;
 
-
-const MAX_WAIT_DURATION: Duration = Duration::from_millis(100);
+const MAX_WAIT_DURATION: Duration = Duration::from_millis(10000);
 
 #[derive(Clone, Copy, Eq, PartialEq, EnumCount)]
 #[repr(usize)]
@@ -161,7 +160,10 @@ impl QuotaLimiter {
         if value == 0 {
             return Duration::ZERO;
         }
-        let dur = self.limiter.consume_duration(value as usize).min(MAX_WAIT_DURATION);
+        let dur = self
+            .limiter
+            .consume_duration(value as usize)
+            .min(MAX_WAIT_DURATION);
         if dur != Duration::ZERO {
             self.total_wait_dur_us
                 .fetch_add(dur.as_micros() as u64, Ordering::Relaxed);
@@ -178,7 +180,10 @@ impl QuotaLimiter {
         if value == 0 {
             return Duration::ZERO;
         }
-        let dur = self.limiter.consume_duration(value as usize).min(MAX_WAIT_DURATION);
+        let dur = self
+            .limiter
+            .consume_duration(value as usize)
+            .min(MAX_WAIT_DURATION);
         if dur != Duration::ZERO {
             self.total_wait_dur_us
                 .fetch_add(dur.as_micros() as u64, Ordering::Relaxed);

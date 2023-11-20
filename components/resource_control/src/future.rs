@@ -19,7 +19,7 @@ use crate::{
     resource_limiter::{ResourceLimiter, ResourceType},
 };
 
-const MAX_WAIT_DURATION: Duration = Duration::from_millis(100);
+const MAX_WAIT_DURATION: Duration = Duration::from_secs(100);
 
 #[pin_project]
 pub struct ControlledFuture<F> {
@@ -157,14 +157,18 @@ impl<F: Future> Future for LimitedFuture<F> {
         } else {
             IoBytes::default()
         };
-        let mut wait_dur = this.resource_limiter.consume(dur, io_bytes);
+        let wait_dur = this.resource_limiter.consume(dur, io_bytes);
+        // if wait_dur == Duration::ZERO {
+        //     return res;
+        // }
         if wait_dur == Duration::ZERO {
             return res;
         }
-        if wait_dur > MAX_WAIT_DURATION {
-            warn!("limiter future wait too long"; "wait" => ?wait_dur, "io_read" => io_bytes.read, "io_write" => io_bytes.write, "cpu" => ?dur);
-            wait_dur = MAX_WAIT_DURATION;
-        }
+        // if wait_dur > MAX_WAIT_DURATION {
+        //     warn!("limiter future wait too long"; "wait" => ?wait_dur, "io_read" =>
+        // io_bytes.read, "io_write" => io_bytes.write, "cpu" => ?dur);
+        //     wait_dur = MAX_WAIT_DURATION;
+        // }
         *this.post_delay = Some(
             GLOBAL_TIMER_HANDLE
                 .delay(std::time::Instant::now() + wait_dur)

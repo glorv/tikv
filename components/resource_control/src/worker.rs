@@ -4,6 +4,7 @@ use std::{
     array,
     collections::{HashMap, HashSet},
     io::Result as IoResult,
+    ops::{Add, AddAssign, Div, Sub, SubAssign},
     sync::Arc,
     time::Duration,
 };
@@ -12,10 +13,10 @@ use file_system::{fetch_io_bytes, IoBytes, IoType};
 use prometheus::Histogram;
 use strum::{EnumCount, IntoEnumIterator};
 use tikv_util::{
-    debug,
+    debug, info,
     sys::{cpu_time::ProcessStat, SysQuota},
     time::Instant,
-    warn, info,
+    warn,
     yatp_pool::metrics::YATP_POOL_SCHEDULE_WAIT_DURATION_VEC,
 };
 
@@ -448,7 +449,7 @@ impl<R: ResourceStatsProvider> PriorityLimiterAdjustWorker<R> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 struct LimiterStats {
     // QuotaLimiter consumed cpu secs in total
     cpu_secs: f64,
@@ -456,6 +457,41 @@ struct LimiterStats {
     wait_secs: f64,
     // the total number of tasks that are scheduled.
     req_count: u64,
+}
+
+impl Add for LimiterStats {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            cpu_secs: self.cpu_secs + rhs.cpu_secs,
+            wait_secs: self.wait_secs + rhs.wait_secs,
+            req_count: self.req_count + rhs.req_count,
+        }
+    }
+}
+
+impl Sub for LimiterStats {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
+        // assert!(self.cpu_secs >= rhs.cpu_secs && self.wait_secs >= rhs.wait_secs &&
+        // self.req_count >= rhs.req_count);
+        Self {
+            cpu_secs: self.cpu_secs - rhs.cpu_secs,
+            wait_secs: self.wait_secs - rhs.wait_secs,
+            req_count: self.req_count - rhs.req_count,
+        }
+    }
+}
+
+impl Div<usize> for LimiterStats {
+    type Output = Self;
+    fn div(self, rhs: usize) -> Self::Output {
+        Self {
+            cpu_secs: self.cpu_secs / rhs as f64,
+            wait_secs: self.wait_secs / rhs as f64,
+            req_count: self.req_count / rhs as u64,
+        }
+    }
 }
 
 struct HistogramTracker {
@@ -485,12 +521,19 @@ impl HistogramTracker {
     }
 }
 
+// the duration of recent window is 6 * 10s = 60s
+const PRIORITY_RECENT_WINDOW_SIZE: usize = 6;
+// the duration of full sample window is 30 * 10s = 300s
+const PRIORITY_SAMPLE_WINDOW_SIZE: usize = 30;
+
 struct PriorityLimiterStatsTracker {
     priority: &'static str,
     limiter: Arc<ResourceLimiter>,
     last_stats: GroupStatistics,
     // unified-read-pool and schedule-worker-pool wait duration metrics.
     task_wait_dur_trakcers: [HistogramTracker; 2],
+    stats_samples:
+        WindowSmoother<LimiterStats, PRIORITY_RECENT_WINDOW_SIZE, PRIORITY_SAMPLE_WINDOW_SIZE>,
 }
 
 impl PriorityLimiterStatsTracker {
@@ -509,6 +552,7 @@ impl PriorityLimiterStatsTracker {
             limiter,
             last_stats,
             task_wait_dur_trakcers,
+            stats_samples: WindowSmoother::default(),
         }
     }
 
@@ -520,13 +564,70 @@ impl PriorityLimiterStatsTracker {
             std::array::from_fn(|i| self.task_wait_dur_trakcers[i].get_and_upate_statistics());
         let schedule_wait_dur_secs = wait_stats.iter().map(|s| s.0).sum::<f64>() / dur_secs;
         let expected_wait_dur_secs = stats_delta.request_count as f64 * 0.000_005;
-        let normed_schedule_wait_dur_secs = (schedule_wait_dur_secs - expected_wait_dur_secs).max(0.0);
-        LimiterStats {
+        let normed_schedule_wait_dur_secs =
+            (schedule_wait_dur_secs - expected_wait_dur_secs).max(0.0);
+        let stats = LimiterStats {
             cpu_secs: stats_delta.total_consumed as f64 / MICROS_PER_SEC,
             wait_secs: stats_delta.total_wait_dur_us as f64 / MICROS_PER_SEC
                 + normed_schedule_wait_dur_secs,
             req_count: stats_delta.request_count,
+        };
+        self.stats_samples.observe(stats);
+        self.stats_samples.avg_recent_value()
+    }
+}
+
+struct WindowSmoother<T, const RECENT: usize, const CAP: usize> {
+    cursor: usize,
+    samples: [T; CAP],
+    full_sum: T,
+    recent_sum: T,
+}
+
+impl<T, const RECENT: usize, const CAP: usize> Default for WindowSmoother<T, RECENT, CAP>
+where
+    T: Default
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Div<usize, Output = T>
+        + PartialOrd
+        + Clone
+        + Copy,
+{
+    fn default() -> Self {
+        Self {
+            cursor: 0,
+            samples: std::array::from_fn(|_| T::default()),
+            full_sum: T::default(),
+            recent_sum: T::default(),
         }
+    }
+}
+
+impl<T, const RECENT: usize, const CAP: usize> WindowSmoother<T, RECENT, CAP>
+where
+    T: Default
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Div<usize, Output = T>
+        + PartialOrd
+        + Clone
+        + Copy,
+{
+    fn observe(&mut self, data: T) {
+        let recent_cursor = (self.cursor + CAP - RECENT) % CAP;
+        self.full_sum = self.full_sum + data - self.samples[self.cursor];
+        self.recent_sum = self.recent_sum + data - self.samples[recent_cursor];
+        self.samples[self.cursor] = data;
+        self.cursor = (self.cursor + 1) % CAP;
+    }
+
+    fn avg_full_value(&self) -> T {
+        self.full_sum / CAP
+    }
+
+    fn avg_recent_value(&self) -> T {
+        self.recent_sum / RECENT
     }
 }
 
