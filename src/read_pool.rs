@@ -145,6 +145,7 @@ impl ReadPoolHandle {
                 let group_name = metadata.group_name().to_owned();
                 let mut extras = Extras::new_multilevel(task_id, fixed_level);
                 extras.set_metadata(metadata.to_vec());
+                let r = running_tasks.clone();
                 if let Some(resource_ctl) = resource_ctl {
                     let fut = TrackedFuture::new(with_resource_limiter(
                         ControlledFuture::new(
@@ -157,13 +158,21 @@ impl ReadPoolHandle {
                         ),
                         resource_limiter,
                     ));
-                    remote.spawn_with_extras(fut, extras)?;
+                    remote.spawn_with_extras(fut, extras).map_err(|e| {
+                        UNIFIED_READ_POOL_ERROR_TASKS.inc();
+                        r.dec();
+                        e
+                    })?;
                 } else {
                     let fut = async move {
                         f.await;
                         running_tasks.dec();
                     };
-                    remote.spawn_with_extras(fut, extras)?;
+                    remote.spawn_with_extras(fut, extras).map_err(|e| {
+                        UNIFIED_READ_POOL_ERROR_TASKS.inc();
+                        r.dec();
+                        e
+                    })?;
                 }
             }
         }
@@ -731,6 +740,11 @@ mod metrics {
             &["name"]
         )
         .unwrap();
+
+        pub static ref UNIFIED_READ_POOL_ERROR_TASKS: IntCounter = register_int_counter!(
+            "tikv_unified_read_pool_error_tasks",
+            "The number of running tasks in the unified read pool"
+        ).unwrap();
     }
 }
 
