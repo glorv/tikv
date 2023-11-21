@@ -715,14 +715,12 @@ impl<'a> TaskMetadata<'a> {
         }
     }
 
-    fn from_bytes(bytes: &'a [u8]) -> Self {
-        Self {
-            metadata: Cow::Borrowed(bytes),
-        }
-    }
-
     pub fn to_vec(self) -> Vec<u8> {
         self.metadata.into_owned()
+    }
+
+    pub fn as_raw_bytes(&self) -> &[u8] {
+        self.metadata.as_ref()
     }
 
     pub fn override_priority(&self) -> u32 {
@@ -751,10 +749,18 @@ impl<'a> TaskMetadata<'a> {
     }
 }
 
+impl<'a> From<&'a [u8]> for TaskMetadata<'a> {
+    fn from(bytes: &'a [u8]) -> Self {
+        Self {
+            metadata: Cow::Borrowed(bytes),
+        }
+    }
+}
+
 // return the TaskPriority value from task metadata.
 // This function is used for handling thread pool task waiting metrics.
 pub fn priority_from_task_meta(meta: &[u8]) -> usize {
-    let priority = TaskMetadata::from_bytes(meta).override_priority();
+    let priority = TaskMetadata::from(meta).override_priority();
     // mapping (high(15), medium(8), low(1)) -> (0, 1, 2)
     debug_assert!(priority <= 16);
     TaskPriority::from(priority) as usize
@@ -762,7 +768,7 @@ pub fn priority_from_task_meta(meta: &[u8]) -> usize {
 
 impl TaskPriorityProvider for ResourceController {
     fn priority_of(&self, extras: &yatp::queue::Extras) -> u64 {
-        let metadata = TaskMetadata::from_bytes(extras.metadata());
+        let metadata = TaskMetadata::from(extras.metadata());
         self.resource_group(metadata.group_name()).get_priority(
             extras.current_level() as usize,
             if metadata.override_priority() == 0 {
@@ -1336,7 +1342,7 @@ pub(crate) mod tests {
             assert_eq!(metadata.override_priority(), priority);
             assert_eq!(metadata.group_name(), group_name.as_bytes());
             let vec = metadata.to_vec();
-            let metadata1 = TaskMetadata::from_bytes(&vec);
+            let metadata1 = TaskMetadata::from(&vec);
             assert_eq!(metadata1.override_priority(), priority);
             assert_eq!(metadata1.group_name(), group_name.as_bytes());
         }

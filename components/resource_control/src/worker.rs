@@ -442,7 +442,7 @@ impl<R: ResourceStatsProvider> PriorityLimiterAdjustWorker<R> {
             limits[i - 1] = limit;
             expect_cpu_time_total -= level_expected[i];
         }
-        debug!("adjsut cpu limiter by priority"; "cpu_quota" => process_cpu_stats.total_quota, "process_cpu" => process_cpu_stats.current_used, "expected_cpu" => ?level_expected,
+        tikv_util::info!("adjsut cpu limiter by priority"; "cpu_quota" => process_cpu_stats.total_quota, "process_cpu" => process_cpu_stats.current_used, "expected_cpu" => ?level_expected,
             "limits" => ?limits, "limit_cpu_total" => expect_pool_cpu_total, "pool_cpu_cost" => real_cpu_total);
     }
 }
