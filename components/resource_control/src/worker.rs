@@ -444,8 +444,8 @@ impl<R: ResourceStatsProvider> PriorityLimiterAdjustWorker<R> {
             limits[i - 1] = limit;
             expect_cpu_time_total -= level_expected[i];
         }
-        info!("adjsut cpu limiter by priority"; "cpu_quota" => process_cpu_stats.total_quota, "process_cpu" => process_cpu_stats.current_used, "level_cpu_cost" => ?cpu_duration, "expected_cpu" => ?level_expected,
-            "limits" => ?limits, "limit_cpu_total" => expect_pool_cpu_total, "pool_cpu_cost" => real_cpu_total);
+        tikv_util::info!("adjsut cpu limiter by priority"; "cpu_quota" => process_cpu_stats.total_quota, "process_cpu" => process_cpu_stats.current_used, "expected_cpu" => ?level_expected,
+            "limits" => ?limits, "cpu_costs" => ?cpu_duration, "limit_cpu_total" => expect_pool_cpu_total, "pool_cpu_cost" => real_cpu_total);
     }
 }
 
@@ -573,7 +573,8 @@ impl PriorityLimiterStatsTracker {
             req_count: stats_delta.request_count,
         };
         self.stats_samples.observe(stats);
-        self.stats_samples.avg_recent_value()
+        // self.stats_samples.avg_recent_value()
+        self.stats_samples.last_value()
     }
 }
 
@@ -628,6 +629,10 @@ where
 
     fn avg_recent_value(&self) -> T {
         self.recent_sum / RECENT
+    }
+
+    fn last_value(&self) -> T {
+        self.samples[(self.cursor + CAP - 1) % CAP]
     }
 }
 

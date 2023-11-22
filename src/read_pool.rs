@@ -17,7 +17,8 @@ use kvproto::{errorpb, kvrpcpb::CommandPri};
 use online_config::{ConfigChange, ConfigManager, ConfigValue, Result as CfgResult};
 use prometheus::{core::Metric, Histogram, IntCounter, IntGauge};
 use resource_control::{
-    with_resource_limiter, ControlledFuture, ResourceController, ResourceLimiter, TaskMetadata,
+    priority_from_task_meta, with_resource_limiter, ControlledFuture, ResourceController,
+    ResourceLimiter, TaskMetadata,
 };
 use thiserror::Error;
 use tikv_util::{
@@ -26,7 +27,6 @@ use tikv_util::{
     worker::{Runnable, RunnableWithTimer, Scheduler, Worker},
     yatp_pool::{self, CleanupMethod, FuturePool, PoolTicker, YatpPoolBuilder},
 };
-use tracker::TrackedFuture;
 use yatp::{metrics::MULTILEVEL_LEVEL_ELAPSED, queue::Extras};
 
 use self::metrics::*;
@@ -54,8 +54,7 @@ pub enum ReadPool {
     },
     Yatp {
         pool: FuturePool,
-        // deprecated. will remove in the v8.x.
-        running_tasks: IntGauge,
+        running_tasks_by_priority: [IntGauge; 3],
         resource_ctl: Option<Arc<ResourceController>>,
         time_slice_inspector: Arc<TimeSliceInspector>,
     },
@@ -75,12 +74,12 @@ impl ReadPool {
             },
             ReadPool::Yatp {
                 pool,
-                running_tasks,
+                running_tasks_by_priority,
                 resource_ctl,
                 time_slice_inspector,
             } => ReadPoolHandle::Yatp {
                 remote: pool.clone(),
-                running_tasks: running_tasks.clone(),
+                running_tasks_by_priority: running_tasks_by_priority.clone(),
                 resource_ctl: resource_ctl.clone(),
                 time_slice_inspector: time_slice_inspector.clone(),
             },
@@ -97,7 +96,7 @@ pub enum ReadPoolHandle {
     },
     Yatp {
         remote: FuturePool,
-        running_tasks: IntGauge,
+        running_tasks_by_priority: [IntGauge; 3],
         resource_ctl: Option<Arc<ResourceController>>,
         time_slice_inspector: Arc<TimeSliceInspector>,
     },
@@ -131,12 +130,17 @@ impl ReadPoolHandle {
             }
             ReadPoolHandle::Yatp {
                 remote,
-                running_tasks,
+                running_tasks_by_priority,
                 resource_ctl,
                 ..
             } => {
-                let running_tasks = running_tasks.clone();
+                let metric_idx = priority_from_task_meta(metadata.as_raw_bytes());
+                let running_tasks = running_tasks_by_priority[metric_idx].clone();
+                if running_tasks.get() as usize >= remote.get_max_tasks_count() / 3 {
+                    return Err(ReadPoolError::UnifiedReadPoolFull);
+                }
                 running_tasks.inc();
+
                 let fixed_level = match priority {
                     CommandPri::High => Some(0),
                     CommandPri::Normal => None,
@@ -145,9 +149,9 @@ impl ReadPoolHandle {
                 let group_name = metadata.group_name().to_owned();
                 let mut extras = Extras::new_multilevel(task_id, fixed_level);
                 extras.set_metadata(metadata.to_vec());
-                let r = running_tasks.clone();
+                let running_tasks1 = running_tasks.clone();
                 if let Some(resource_ctl) = resource_ctl {
-                    let fut = TrackedFuture::new(with_resource_limiter(
+                    let fut = with_resource_limiter(
                         ControlledFuture::new(
                             async move {
                                 f.await;
@@ -157,10 +161,9 @@ impl ReadPoolHandle {
                             group_name,
                         ),
                         resource_limiter,
-                    ));
+                    );
                     remote.spawn_with_extras(fut, extras).map_err(|e| {
-                        UNIFIED_READ_POOL_ERROR_TASKS.inc();
-                        r.dec();
+                        running_tasks1.dec();
                         e
                     })?;
                 } else {
@@ -169,8 +172,7 @@ impl ReadPoolHandle {
                         running_tasks.dec();
                     };
                     remote.spawn_with_extras(fut, extras).map_err(|e| {
-                        UNIFIED_READ_POOL_ERROR_TASKS.inc();
-                        r.dec();
+                        running_tasks1.dec();
                         e
                     })?;
                 }
@@ -224,9 +226,26 @@ impl ReadPoolHandle {
             } => read_pool_normal.get_running_task_count() / read_pool_normal.get_pool_size(),
             ReadPoolHandle::Yatp {
                 remote,
-                running_tasks,
+                running_tasks_by_priority,
                 ..
-            } => running_tasks.get() as usize / remote.get_pool_size(),
+            } => {
+                running_tasks_by_priority
+                    .iter()
+                    .map(|r| r.get())
+                    .sum::<i64>() as usize
+                    / remote.get_pool_size()
+            }
+        }
+    }
+
+    pub fn set_max_tasks_per_worker(&self, tasks_per_thread: usize) {
+        match self {
+            ReadPoolHandle::FuturePools { .. } => {
+                unreachable!()
+            }
+            ReadPoolHandle::Yatp { remote, .. } => {
+                remote.set_max_tasks_per_worker(tasks_per_thread);
+            }
         }
     }
 
@@ -470,8 +489,9 @@ pub fn build_yatp_read_pool_with_name<E: Engine, R: FlowStatsReporter>(
     let time_slice_inspector = Arc::new(TimeSliceInspector::new(&unified_read_pool_name));
     ReadPool::Yatp {
         pool,
-        running_tasks: UNIFIED_READ_POOL_RUNNING_TASKS
-            .with_label_values(&[&unified_read_pool_name]),
+        running_tasks_by_priority: ["high", "medium", "low"].map(|p| {
+            UNIFIED_READ_POOL_RUNNING_TASKS.with_label_values(&[&unified_read_pool_name, p])
+        }),
         resource_ctl,
         time_slice_inspector,
     }
@@ -566,6 +586,9 @@ impl Runnable for ReadPoolConfigRunner {
                     self.cur_thread_count = self.core_thread_count;
                 }
             }
+            Task::MaxTasks(s) => {
+                self.handle.set_max_tasks_per_worker(s);
+            }
         }
     }
 }
@@ -583,7 +606,10 @@ impl RunnableWithTimer for ReadPoolConfigRunner {
 impl ReadPoolConfigRunner {
     fn running_tasks(&self) -> i64 {
         match &self.handle {
-            ReadPoolHandle::Yatp { running_tasks, .. } => running_tasks.get(),
+            ReadPoolHandle::Yatp {
+                running_tasks_by_priority,
+                ..
+            } => running_tasks_by_priority.iter().map(|r| r.get()).sum(),
             _ => unreachable!(),
         }
     }
@@ -650,6 +676,7 @@ impl ReadPoolConfigRunner {
 enum Task {
     PoolSize(usize),
     AutoAdjust(bool),
+    MaxTasks(usize),
 }
 
 impl std::fmt::Display for Task {
@@ -657,6 +684,7 @@ impl std::fmt::Display for Task {
         match self {
             Task::PoolSize(s) => write!(f, "PoolSize({})", *s),
             Task::AutoAdjust(s) => write!(f, "AutoAdjust({})", *s),
+            Task::MaxTasks(s) => write!(f, "MaxTasksPerWorker({}", *s),
         }
     }
 }
@@ -709,6 +737,9 @@ impl ConfigManager for ReadPoolConfigManager {
             if let Some(ConfigValue::Bool(b)) = unified.get("auto_adjust_pool_size") {
                 self.scheduler.schedule(Task::AutoAdjust(*b))?;
             }
+            if let Some(ConfigValue::Usize(max_tasks)) = unified.get("max_tasks_per_worker") {
+                self.scheduler.schedule(Task::MaxTasks(*max_tasks))?;
+            }
         }
         info!(
             "readpool config changed";
@@ -737,14 +768,14 @@ mod metrics {
         pub static ref UNIFIED_READ_POOL_RUNNING_TASKS: IntGaugeVec = register_int_gauge_vec!(
             "tikv_unified_read_pool_running_tasks",
             "The number of running tasks in the unified read pool",
-            &["name"]
+            &["name", "priority"]
         )
         .unwrap();
-
         pub static ref UNIFIED_READ_POOL_ERROR_TASKS: IntCounter = register_int_counter!(
             "tikv_unified_read_pool_error_tasks",
             "The number of running tasks in the unified read pool"
-        ).unwrap();
+        )
+        .unwrap();
     }
 }
 
