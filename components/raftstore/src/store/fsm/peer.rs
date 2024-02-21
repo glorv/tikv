@@ -2392,6 +2392,13 @@ where
                     self.register_split_region_check_tick();
                     self.retry_pending_prepare_merge(applied_index);
                 }
+                if self.fsm.peer.min_safe_index_for_unpersisted_apply > 0 && self.fsm.peer.min_safe_index_for_unpersisted_apply < applied_index {
+                    if self.fsm.peer.enable_apply_unpersisted_entries {
+                        self.fsm.peer.raft_group.raft.set_allow_apply_unpersisted_entries(true);
+                    }
+                    
+                    self.fsm.peer.min_safe_index_for_unpersisted_apply = 0;
+                }
             }
             ApplyTaskRes::Destroy {
                 region_id,
@@ -5672,7 +5679,9 @@ where
         //              first_index                         replicated_index
         // `alive_cache_idx` is the smallest `replicated_index` of healthy up nodes.
         // `alive_cache_idx` is only used to gc cache.
-        let applied_idx = self.fsm.peer.get_store().applied_index();
+        let _applied_idx = self.fsm.peer.get_store().applied_index();
+        // TODO: is it right to only truncate persisted logs.
+        let applied_idx = std::cmp::min(self.fsm.peer.get_store().applied_index(), self.fsm.peer.raft_group.raft.r.raft_log.persisted);
         let truncated_idx = self.fsm.peer.get_store().truncated_index();
         let first_idx = self.fsm.peer.get_store().first_index();
         let last_idx = self.fsm.peer.get_store().last_index();

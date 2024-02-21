@@ -787,6 +787,8 @@ where
     pub pending_request_snapshot_count: Arc<AtomicUsize>,
     /// The index of last scheduled committed raft log.
     pub last_applying_idx: u64,
+    pub enable_apply_unpersisted_entries: bool,
+    pub min_safe_index_for_unpersisted_apply: u64,
     /// The index of last compacted raft log. It is used for the next compact
     /// log task.
     pub last_compacted_idx: u64,
@@ -991,6 +993,8 @@ where
             leader_missing_time: Some(Instant::now()),
             tag: tag.clone(),
             last_applying_idx: applied_index,
+            enable_apply_unpersisted_entries: cfg.enable_apply_unpersisted_entries,
+            min_safe_index_for_unpersisted_apply: last_index,
             last_compacted_idx: 0,
             last_compacted_time: Instant::now(),
             has_pending_compact_cmd,
@@ -3698,6 +3702,11 @@ where
                         .post_propose(cmd_type, idx, self.term());
                 }
                 self.post_propose(ctx, p);
+                if req_admin_cmd_type == Some(AdminCmdType::PrepareMerge) {
+                    self.min_safe_index_for_unpersisted_apply = std::cmp::max(self.min_safe_index_for_unpersisted_apply, idx);
+                    self.raft_group.raft.set_allow_apply_unpersisted_entries(false);
+                }
+
                 true
             }
         }
@@ -5663,6 +5672,15 @@ where
             self.raft_max_inflight_msgs = raft_max_inflight_msgs;
         }
         self.raft_group.raft.r.max_msg_size = ctx.cfg.raft_max_size_per_msg.0;
+        self.enable_apply_unpersisted_entries = ctx.cfg.enable_apply_unpersisted_entries;
+        if self.raft_group.raft.r.raft_log.allow_apply_unpersisted_entries != self.enable_apply_unpersisted_entries {
+            if !self.enable_apply_unpersisted_entries {
+                self.raft_group.raft.set_allow_apply_unpersisted_entries(false);
+            } else if self.min_safe_index_for_unpersisted_apply < self.raft_group.raft.r.raft_log.applied {
+                self.raft_group.raft.set_allow_apply_unpersisted_entries(true);
+                self.min_safe_index_for_unpersisted_apply = 0;
+            }
+        }
     }
 
     /// Update states of the peer which can be changed in the previous raft

@@ -70,6 +70,7 @@ pub struct Config {
     pub raft_max_election_timeout_ticks: usize,
     pub raft_max_size_per_msg: ReadableSize,
     pub raft_max_inflight_msgs: usize,
+    pub enable_apply_unpersisted_entries: bool,
     // When the entry exceed the max size, reject to propose it.
     pub raft_entry_max_size: ReadableSize,
 
@@ -430,6 +431,7 @@ impl Default for Config {
             raft_max_election_timeout_ticks: 0,
             raft_max_size_per_msg: ReadableSize::mb(1),
             raft_max_inflight_msgs: 256,
+            enable_apply_unpersisted_entries: false,
             raft_entry_max_size: ReadableSize::mb(8),
             raft_log_compact_sync_interval: ReadableDuration::secs(2),
             raft_log_gc_tick_interval: ReadableDuration::secs(3),
