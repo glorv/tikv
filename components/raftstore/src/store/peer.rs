@@ -2330,6 +2330,9 @@ where
             "peer_id" => self.peer_id(),
         );
 
+        self.min_safe_index_for_unpersisted_apply = self.raft_group.raft.r.raft_log.committed;
+        self.raft_group.raft.set_allow_apply_unpersisted_entries(false);
+
         self.read_progress
             .update_leader_info(leader_id, term, self.region());
     }

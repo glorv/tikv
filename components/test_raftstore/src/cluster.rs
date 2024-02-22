@@ -413,6 +413,7 @@ where
         // the map above as current thread may also query properties during shutdown.
         let previous_prop = tikv_util::thread_group::current_properties();
         tikv_util::thread_group::set_properties(Some(self.group_props[&node_id].clone()));
+        println!("  before write lock");
         match self.sim.write() {
             Ok(mut sim) => sim.stop_node(node_id),
             Err(_) => safe_panic!("failed to acquire write lock."),
