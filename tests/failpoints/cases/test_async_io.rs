@@ -97,7 +97,6 @@ fn test_async_io_apply_without_leader_persist() {
     for i in 1..=3 {
         must_get_equal(&cluster.get_engine(i), b"k1", b"v2");
     }
-
 }
 
 /// Test if the leader delays its destroy after applying conf change to

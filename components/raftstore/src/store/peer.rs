@@ -993,7 +993,7 @@ where
             leader_missing_time: Some(Instant::now()),
             tag: tag.clone(),
             last_applying_idx: applied_index,
-            enable_apply_unpersisted_entries: cfg.enable_apply_unpersisted_entries,
+            enable_apply_unpersisted_entries: false,
             min_safe_index_for_unpersisted_apply: last_index,
             last_compacted_idx: 0,
             last_compacted_time: Instant::now(),
@@ -2330,8 +2330,13 @@ where
             "peer_id" => self.peer_id(),
         );
 
-        self.min_safe_index_for_unpersisted_apply = self.raft_group.raft.r.raft_log.committed;
-        self.raft_group.raft.set_allow_apply_unpersisted_entries(false);
+        self.min_safe_index_for_unpersisted_apply = std::cmp::max(
+            self.min_safe_index_for_unpersisted_apply,
+            self.raft_group.raft.r.raft_log.committed,
+        );
+        self.raft_group
+            .raft
+            .set_allow_apply_unpersisted_entries(false);
 
         self.read_progress
             .update_leader_info(leader_id, term, self.region());
@@ -2993,12 +2998,17 @@ where
                     .map(|b| b.meta.clone()),
             );
             apply.on_schedule(&ctx.raft_metrics);
-            self.mut_store()
-                .trace_cached_entries(apply.entries[0].clone());
-            if needs_evict_entry_cache(ctx.cfg.evict_cache_on_memory_ratio) {
-                // Compact all cached entries instead of half evict.
-                self.mut_store().evict_entry_cache(false);
+            // skip trace committed entries if they are still not persisted.
+            if self.last_applying_idx <= self.raft_group.raft.r.raft_log.persisted {
+                self.mut_store()
+                    .trace_cached_entries(apply.entries[0].clone());
+
+                if needs_evict_entry_cache(ctx.cfg.evict_cache_on_memory_ratio) {
+                    // Compact all cached entries instead of half evict.
+                    self.mut_store().evict_entry_cache(false);
+                }
             }
+
             ctx.apply_router
                 .schedule_task(self.region_id, ApplyTask::apply(apply));
         }
@@ -3706,8 +3716,11 @@ where
                 }
                 self.post_propose(ctx, p);
                 if req_admin_cmd_type == Some(AdminCmdType::PrepareMerge) {
-                    self.min_safe_index_for_unpersisted_apply = std::cmp::max(self.min_safe_index_for_unpersisted_apply, idx);
-                    self.raft_group.raft.set_allow_apply_unpersisted_entries(false);
+                    self.min_safe_index_for_unpersisted_apply =
+                        std::cmp::max(self.min_safe_index_for_unpersisted_apply, idx);
+                    self.raft_group
+                        .raft
+                        .set_allow_apply_unpersisted_entries(false);
                 }
 
                 true
@@ -5676,11 +5689,25 @@ where
         }
         self.raft_group.raft.r.max_msg_size = ctx.cfg.raft_max_size_per_msg.0;
         self.enable_apply_unpersisted_entries = ctx.cfg.enable_apply_unpersisted_entries;
-        if self.raft_group.raft.r.raft_log.allow_apply_unpersisted_entries != self.enable_apply_unpersisted_entries {
+        if self
+            .raft_group
+            .raft
+            .r
+            .raft_log
+            .allow_apply_unpersisted_entries
+            != self.enable_apply_unpersisted_entries
+        {
             if !self.enable_apply_unpersisted_entries {
-                self.raft_group.raft.set_allow_apply_unpersisted_entries(false);
-            } else if self.min_safe_index_for_unpersisted_apply < self.raft_group.raft.r.raft_log.applied {
-                self.raft_group.raft.set_allow_apply_unpersisted_entries(true);
+                self.raft_group
+                    .raft
+                    .set_allow_apply_unpersisted_entries(false);
+            } else if self.is_leader()
+                && self.min_safe_index_for_unpersisted_apply
+                    < self.raft_group.raft.r.raft_log.applied
+            {
+                self.raft_group
+                    .raft
+                    .set_allow_apply_unpersisted_entries(true);
                 self.min_safe_index_for_unpersisted_apply = 0;
             }
         }

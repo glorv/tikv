@@ -556,9 +556,10 @@ pub fn init_applied_term<ER: RaftEngine>(
             //     region.get_id(),
             //     apply_state.applied_index
             // ))
-            // applied index is ahead of committed index, applied terms is equal to commited term.
+            // applied index is ahead of committed index, applied terms is equal to commited
+            // term.
             Ok(apply_state.commit_term)
-        },
+        }
     }
 }
 
