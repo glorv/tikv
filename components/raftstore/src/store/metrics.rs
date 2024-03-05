@@ -767,6 +767,11 @@ lazy_static! {
         exponential_buckets(8.0, 2.0, 24).unwrap()
     ).unwrap();
 
+    pub static ref RAFT_APPLY_AHEAD_DELTA_HISTOGRAM: Histogram = register_histogram!(
+        "tikv_raft_apply_ahead_index_delta",
+        "Histogram of the lag between persisted index and applied index",
+    ).unwrap();
+
     pub static ref RAFT_ENTRIES_CACHES_GAUGE: IntGauge = register_int_gauge!(
         "tikv_raft_entries_caches",
         "Total memory size of raft entries caches."

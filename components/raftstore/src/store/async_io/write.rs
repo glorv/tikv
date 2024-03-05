@@ -723,7 +723,7 @@ where
         let mut write_kv_time = 0f64;
         if let ExtraBatchWrite::V1(kv_wb) = &mut self.batch.extra_batch_write {
             if !kv_wb.is_empty() {
-                let store_id = self.store_id;
+                //let store_id = self.store_id;
                 let raft_before_save_kv_on_store_3 = || {
                     fail_point!("raft_before_save_kv_on_store_3", store_id == 3, |_| {});
                 };

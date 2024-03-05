@@ -3012,6 +3012,9 @@ where
 
             ctx.apply_router
                 .schedule_task(self.region_id, ApplyTask::apply(apply));
+            let last_persist_index = self.raft_group.raft.r.raft_log.persisted;
+            let apply_ahead_delta = self.last_applying_idx.saturating_sub(last_persist_index);
+            RAFT_APPLY_AHEAD_DELTA_HISTOGRAM.observe(apply_ahead_delta as f64);
         }
         fail_point!("after_send_to_apply_1003", self.peer_id() == 1003, |_| {});
     }
