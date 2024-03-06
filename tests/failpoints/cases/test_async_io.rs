@@ -81,17 +81,12 @@ fn test_async_io_apply_without_leader_persist() {
         must_get_equal(&cluster.get_engine(i), b"k9", b"v1");
     }
 
-    println!("befre stop node");
     cluster.stop_node(1);
-    println!("after stop node");
-
     fail::remove(raft_before_save_on_store_1_fp);
 
     // node 1 can recover successfully.
-    println!("befre run node");
     cluster.run_node(1).unwrap();
 
-    println!("after run node");
     cluster.must_put(b"k1", b"v2");
     sleep_ms(100);
     for i in 1..=3 {

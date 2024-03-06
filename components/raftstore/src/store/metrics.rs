@@ -770,6 +770,7 @@ lazy_static! {
     pub static ref RAFT_APPLY_AHEAD_DELTA_HISTOGRAM: Histogram = register_histogram!(
         "tikv_raft_apply_ahead_index_delta",
         "Histogram of the lag between persisted index and applied index",
+        exponential_buckets(1.0, 2.0, 20).unwrap()
     ).unwrap();
 
     pub static ref RAFT_ENTRIES_CACHES_GAUGE: IntGauge = register_int_gauge!(

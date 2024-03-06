@@ -433,7 +433,7 @@ impl Default for Config {
             raft_max_size_per_msg: ReadableSize::mb(1),
             raft_max_inflight_msgs: 256,
             enable_apply_unpersisted_entries: false,
-            apply_unpersisted_log_limit: 0,
+            apply_unpersisted_log_limit: 65536,
             raft_entry_max_size: ReadableSize::mb(8),
             raft_log_compact_sync_interval: ReadableDuration::secs(2),
             raft_log_gc_tick_interval: ReadableDuration::secs(3),
