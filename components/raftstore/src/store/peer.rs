@@ -2729,7 +2729,12 @@ where
         if let Some(hs) = ready.hs() {
             let pre_commit_index = self.get_store().commit_index();
             let cur_commit_index = hs.get_commit();
-            assert!(cur_commit_index >= pre_commit_index);
+            assert!(
+                cur_commit_index >= pre_commit_index,
+                "current: {}, pre: {}",
+                cur_commit_index,
+                pre_commit_index
+            );
             if self.is_leader() {
                 self.on_leader_commit_idx_changed(pre_commit_index, cur_commit_index);
             }
