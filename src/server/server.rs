@@ -2,7 +2,7 @@
 
 use std::{
     i32,
-    net::{IpAddr, SocketAddr},
+    net::{SocketAddr},
     str::FromStr,
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -16,7 +16,7 @@ use health_controller::HealthController;
 use kvproto::tikvpb::*;
 use raftstore::store::{CheckLeaderTask, SnapManager, TabletSnapManager};
 use resource_control::ResourceGroupManager;
-use security::SecurityManager;
+use security::{SecurityManager, ServerBuilderWithAddrs};
 use tikv_util::{
     config::VersionTrack,
     sys::{get_global_memory_usage, record_global_memory_usage},
@@ -55,7 +55,7 @@ pub const READPOOL_NORMAL_THREAD_PREFIX: &str = "store-read-norm";
 pub const STATS_THREAD_PREFIX: &str = "transport-stats";
 
 pub trait GrpcBuilderFactory {
-    fn create_builder(&self, env: Arc<Environment>) -> Result<ServerBuilder>;
+    fn create_builder(&self, env: Arc<Environment>) -> Result<ServerBuilderWithAddrs>;
 }
 
 struct BuilderFactory<S: Tikv + Send + Clone + 'static> {
@@ -88,7 +88,7 @@ impl<S> GrpcBuilderFactory for BuilderFactory<S>
 where
     S: Tikv + Send + Clone + 'static,
 {
-    fn create_builder(&self, env: Arc<Environment>) -> Result<ServerBuilder> {
+    fn create_builder(&self, env: Arc<Environment>) -> Result<ServerBuilderWithAddrs> {
         let addr = SocketAddr::from_str(&self.cfg.value().addr)?;
         let ip: String = format!("{}", addr.ip());
         let mem_quota = ResourceQuota::new(Some("ServerMemQuota"))
@@ -121,7 +121,7 @@ pub struct Server<S: StoreAddrResolver + 'static, E: Engine> {
     /// A GrpcServer builder or a GrpcServer.
     ///
     /// If the listening port is configured, the server will be started lazily.
-    builder_or_server: Option<Either<ServerBuilder, GrpcServer>>,
+    builder_or_server: Option<Either<ServerBuilderWithAddrs, GrpcServer>>,
     grpc_mem_quota: ResourceQuota,
     local_addr: SocketAddr,
     // Transport.
@@ -295,10 +295,12 @@ where
 
     /// Build gRPC server and bind to address.
     pub fn build_and_bind(&mut self) -> Result<SocketAddr> {
-        let sb = self.builder_or_server.take().unwrap().left().unwrap();
-        let server = sb.build()?;
-        let (host, port) = server.bind_addrs().next().unwrap();
-        let addr = SocketAddr::new(IpAddr::from_str(host)?, port);
+        let ServerBuilderWithAddrs {sb, addrs} = self.builder_or_server.take().unwrap().left().unwrap();
+        let mut server = sb.build()?;
+        let addr = SocketAddr::from_str(&(&addrs).iter().next().unwrap().0)?;
+        for (addr, creds) in addrs {
+            server.add_listening_port(addr, creds)?;
+        }
         self.local_addr = addr;
         self.builder_or_server = Some(Either::Right(server));
         Ok(addr)
