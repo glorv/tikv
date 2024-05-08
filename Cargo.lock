@@ -2342,7 +2342,7 @@ dependencies = [
 [[package]]
 name = "grpcio"
 version = "0.13.0"
-source = "git+https://github.com/glorv/grpc-rs?branch=metrics#8a3c9a23de33c21b1811211b2de9f747f1adab8a"
+source = "git+https://github.com/glorv/grpc-rs?branch=metrics#fa927009755e1bebb7722ef48eb7ab04c51ab768"
 dependencies = [
  "futures-executor",
  "futures-util",
@@ -2367,7 +2367,7 @@ dependencies = [
 [[package]]
 name = "grpcio-health"
 version = "0.13.0"
-source = "git+https://github.com/glorv/grpc-rs?branch=metrics#8a3c9a23de33c21b1811211b2de9f747f1adab8a"
+source = "git+https://github.com/glorv/grpc-rs?branch=metrics#fa927009755e1bebb7722ef48eb7ab04c51ab768"
 dependencies = [
  "futures-executor",
  "futures-util",
