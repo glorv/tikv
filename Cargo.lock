@@ -256,7 +256,7 @@ dependencies = [
  "fail",
  "futures 0.3.15",
  "futures-util",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "http",
  "hyper",
  "hyper-tls",
@@ -443,7 +443,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "futures-util",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "hex 0.4.2",
  "keys",
  "kvproto",
@@ -496,7 +496,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "futures-io",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "hex 0.4.2",
  "indexmap 1.6.2",
  "kvproto",
@@ -853,7 +853,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-timer",
  "getset",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "keys",
  "kvproto",
  "lazy_static",
@@ -1751,7 +1751,7 @@ dependencies = [
 name = "error_code"
 version = "0.0.1"
 dependencies = [
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "kvproto",
  "lazy_static",
  "raft",
@@ -2313,10 +2313,26 @@ checksum = "1f2506de56197d01821c2d1d21082d2dcfd6c82d7a1d6e04d33f37aab6130632"
 dependencies = [
  "futures-executor",
  "futures-util",
- "grpcio-sys",
+ "grpcio-sys 0.10.3+1.44.0-patched (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.151",
  "log",
  "parking_lot 0.11.1",
+ "protobuf",
+]
+
+[[package]]
+name = "grpcio"
+version = "0.10.4"
+source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#304720a9044facee84946cbf4fb1fa368e4af30d"
+dependencies = [
+ "futures-executor",
+ "futures-util",
+ "grpcio-sys 0.10.3+1.44.0-patched (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
+ "lazy_static",
+ "libc 0.2.151",
+ "log",
+ "parking_lot 0.11.1",
+ "prometheus",
  "protobuf",
 ]
 
@@ -2332,12 +2348,11 @@ dependencies = [
 [[package]]
 name = "grpcio-health"
 version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a37eae605cd21f144b7c7fd0e64e57af9f73d132756fef5b706db110c3ec7ea0"
+source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#304720a9044facee84946cbf4fb1fa368e4af30d"
 dependencies = [
  "futures-executor",
  "futures-util",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "log",
  "protobuf",
 ]
@@ -2347,6 +2362,20 @@ name = "grpcio-sys"
 version = "0.10.3+1.44.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f23adc509a3c4dea990e0ab8d2add4a65389ee69c288b7851d75dd1df7a6d6c6"
+dependencies = [
+ "bindgen 0.59.2",
+ "cc",
+ "cmake",
+ "libc 0.2.151",
+ "libz-sys",
+ "pkg-config",
+ "walkdir",
+]
+
+[[package]]
+name = "grpcio-sys"
+version = "0.10.3+1.44.0-patched"
+source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#304720a9044facee84946cbf4fb1fa368e4af30d"
 dependencies = [
  "bindgen 0.59.2",
  "cc",
@@ -2842,10 +2871,10 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/pingcap/kvproto.git#4fa2b26b2d8003523908b124ab6e70580023eee6"
+source = "git+https://github.com/glorv/kvproto?branch=old-grpc-0.10#3d269426c6bd9aecd03786d638846d709e86552b"
 dependencies = [
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "protobuf",
  "protobuf-build",
  "raft-proto",
@@ -3687,7 +3716,7 @@ dependencies = [
  "error_code",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "kvproto",
  "lazy_static",
  "log",
@@ -4679,7 +4708,7 @@ dependencies = [
  "engine_traits",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "hex 0.4.2",
  "kvproto",
  "lazy_static",
@@ -4746,7 +4775,7 @@ dependencies = [
  "collections",
  "crossbeam",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "kvproto",
  "lazy_static",
  "libc 0.2.151",
@@ -5077,7 +5106,7 @@ version = "0.0.1"
 dependencies = [
  "collections",
  "encryption",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "kvproto",
  "serde",
  "serde_derive",
@@ -5297,7 +5326,7 @@ dependencies = [
  "file_system",
  "fs2",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "grpcio-health",
  "health_controller",
  "hex 0.4.2",
@@ -5510,7 +5539,7 @@ dependencies = [
  "engine_rocks",
  "engine_traits",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "itertools",
  "keys",
  "kvproto",
@@ -5590,7 +5619,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "futures-util",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "keys",
  "kvproto",
  "lazy_static",
@@ -5911,7 +5940,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-executor",
  "futures-util",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "kvproto",
  "protobuf",
  "raftstore",
@@ -5952,7 +5981,7 @@ dependencies = [
  "collections",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "kvproto",
  "log_wrappers",
  "pd_client",
@@ -5971,7 +6000,7 @@ dependencies = [
  "collections",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "keys",
  "kvproto",
  "log_wrappers",
@@ -6003,7 +6032,7 @@ dependencies = [
  "fail",
  "file_system",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "grpcio-health",
  "health_controller",
  "hybrid_engine",
@@ -6053,7 +6082,7 @@ dependencies = [
  "fail",
  "file_system",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "grpcio-health",
  "health_controller",
  "keys",
@@ -6103,7 +6132,7 @@ dependencies = [
  "engine_traits",
  "external_storage",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "keys",
  "kvproto",
  "tempfile",
@@ -6139,7 +6168,7 @@ dependencies = [
  "collections",
  "encryption_export",
  "fail",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "kvproto",
  "rand 0.8.5",
  "rand_isaac",
@@ -6178,7 +6207,7 @@ dependencies = [
  "fail",
  "file_system",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "grpcio-health",
  "health_controller",
  "hyper",
@@ -6480,7 +6509,7 @@ dependencies = [
  "futures-util",
  "fxhash",
  "getset",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "grpcio-health",
  "health_controller",
  "hex 0.4.2",
@@ -6595,7 +6624,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "gag",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "hex 0.4.2",
  "keys",
  "kvproto",
@@ -6755,7 +6784,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-util",
  "gag",
- "grpcio",
+ "grpcio 0.10.4 (git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10)",
  "http",
  "kvproto",
  "lazy_static",
@@ -6857,7 +6886,7 @@ version = "0.0.1"
 source = "git+https://github.com/pingcap/tipb.git#87f5b80908ab561fb7875c88114488cad15727b1"
 dependencies = [
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.10.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf",
  "protobuf-build",
 ]
