@@ -2323,7 +2323,7 @@ dependencies = [
 [[package]]
 name = "grpcio"
 version = "0.10.4"
-source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#304720a9044facee84946cbf4fb1fa368e4af30d"
+source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#10dd1eeefcf23d5f4aed6b3fc5e2a55d9d07d8eb"
 dependencies = [
  "futures-executor",
  "futures-util",
@@ -2348,7 +2348,7 @@ dependencies = [
 [[package]]
 name = "grpcio-health"
 version = "0.10.4"
-source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#304720a9044facee84946cbf4fb1fa368e4af30d"
+source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#10dd1eeefcf23d5f4aed6b3fc5e2a55d9d07d8eb"
 dependencies = [
  "futures-executor",
  "futures-util",
@@ -2375,7 +2375,7 @@ dependencies = [
 [[package]]
 name = "grpcio-sys"
 version = "0.10.3+1.44.0-patched"
-source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#304720a9044facee84946cbf4fb1fa368e4af30d"
+source = "git+https://github.com/glorv/grpc-rs?branch=old-metrics-0.10#10dd1eeefcf23d5f4aed6b3fc5e2a55d9d07d8eb"
 dependencies = [
  "bindgen 0.59.2",
  "cc",
