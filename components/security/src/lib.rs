@@ -15,8 +15,8 @@ use collections::HashSet;
 use encryption::EncryptionConfig;
 use grpcio::{
     CertificateRequestType, Channel, ChannelBuilder, ChannelCredentialsBuilder, CheckResult,
-    RpcContext, RpcStatus, RpcStatusCode, ServerBuilder, ServerChecker, ServerCredentialsBuilder,
-    ServerCredentialsFetcher,
+    RpcContext, RpcStatus, RpcStatusCode, ServerBuilder, ServerChecker, ServerCredentials,
+    ServerCredentialsBuilder, ServerCredentialsFetcher, Service,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
@@ -163,13 +163,14 @@ impl SecurityManager {
                 .root_cert(ca)
                 .cert(cert, key)
                 .build();
-            cb.secure_connect(addr, cred)
+            cb.set_credentials(cred).connect(addr)
         }
     }
 
-    pub fn bind(&self, mut sb: ServerBuilder, addr: &str, port: u16) -> ServerBuilder {
-        if self.cfg.ca_path.is_empty() {
-            sb.bind(addr, port)
+    pub fn bind(&self, mut sb: ServerBuilder, addr: &str, port: u16) -> ServerBuilderWithAddrs {
+        let addr = format!("{}:{}", addr, port);
+        let creds = if self.cfg.ca_path.is_empty() {
+            ServerCredentials::insecure()
         } else {
             if !self.cfg.cert_allowed_cn.is_empty() {
                 let cn_checker = CnChecker {
@@ -181,17 +182,32 @@ impl SecurityManager {
                 cfg: self.cfg.clone(),
                 last_modified_time: Arc::new(Mutex::new(None)),
             });
-            sb.bind_with_fetcher(
-                addr,
-                port,
+            ServerCredentials::with_fetcher(
                 fetcher,
                 CertificateRequestType::RequestAndRequireClientCertificateAndVerify,
             )
+        };
+        ServerBuilderWithAddrs {
+            sb,
+            addrs: vec![(addr, creds)],
         }
     }
 
     pub fn get_config(&self) -> &SecurityConfig {
         &self.cfg
+    }
+}
+
+pub struct ServerBuilderWithAddrs {
+    pub sb: ServerBuilder,
+    pub addrs: Vec<(String, ServerCredentials)>,
+}
+
+impl ServerBuilderWithAddrs {
+    pub fn register_service(self, svc: Service) -> Self {
+        let ServerBuilderWithAddrs { mut sb, addrs } = self;
+        sb = sb.register_service(svc);
+        Self { sb, addrs }
     }
 }
 

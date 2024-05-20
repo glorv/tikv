@@ -256,7 +256,7 @@ dependencies = [
  "fail",
  "futures 0.3.15",
  "futures-util",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "http",
  "hyper",
  "hyper-tls",
@@ -443,7 +443,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "futures-util",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "hex 0.4.2",
  "keys",
  "kvproto",
@@ -496,7 +496,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "futures-io",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "hex 0.4.2",
  "indexmap 1.6.2",
  "kvproto",
@@ -633,6 +633,26 @@ dependencies = [
  "lazycell",
  "peeking_take_while",
  "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex 1.3.0",
+ "syn 2.0.43",
+]
+
+[[package]]
+name = "bindgen"
+version = "0.69.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
+dependencies = [
+ "bitflags 2.4.1",
+ "cexpr",
+ "clang-sys",
+ "itertools",
+ "lazy_static",
+ "lazycell",
  "proc-macro2",
  "quote",
  "regex",
@@ -853,7 +873,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-timer",
  "getset",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "keys",
  "kvproto",
  "lazy_static",
@@ -1751,7 +1771,7 @@ dependencies = [
 name = "error_code"
 version = "0.0.1"
 dependencies = [
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "kvproto",
  "lazy_static",
  "raft",
@@ -2307,16 +2327,30 @@ dependencies = [
 
 [[package]]
 name = "grpcio"
-version = "0.10.4"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f2506de56197d01821c2d1d21082d2dcfd6c82d7a1d6e04d33f37aab6130632"
+checksum = "9e398946b5721d72478eb647260a1b7c1d5f70f0de35399846c3913bd369a33e"
 dependencies = [
  "futures-executor",
  "futures-util",
- "grpcio-sys",
+ "grpcio-sys 0.13.0+1.56.2-patched (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.151",
  "log",
- "parking_lot 0.11.1",
+ "parking_lot 0.12.1",
+ "protobuf",
+]
+
+[[package]]
+name = "grpcio"
+version = "0.13.0"
+source = "git+https://github.com/tikv/grpc-rs?branch=master#b82c9022a1d504396e61dedc122940ab7aeb96c8"
+dependencies = [
+ "futures-executor",
+ "futures-util",
+ "grpcio-sys 0.13.0+1.56.2-patched (git+https://github.com/tikv/grpc-rs?branch=master)",
+ "libc 0.2.151",
+ "log",
+ "parking_lot 0.12.1",
  "protobuf",
 ]
 
@@ -2331,24 +2365,37 @@ dependencies = [
 
 [[package]]
 name = "grpcio-health"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a37eae605cd21f144b7c7fd0e64e57af9f73d132756fef5b706db110c3ec7ea0"
+version = "0.13.0"
+source = "git+https://github.com/tikv/grpc-rs?branch=master#b82c9022a1d504396e61dedc122940ab7aeb96c8"
 dependencies = [
  "futures-executor",
  "futures-util",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "log",
  "protobuf",
 ]
 
 [[package]]
 name = "grpcio-sys"
-version = "0.10.3+1.44.0-patched"
+version = "0.13.0+1.56.2-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f23adc509a3c4dea990e0ab8d2add4a65389ee69c288b7851d75dd1df7a6d6c6"
+checksum = "b3dae9132320ae1b03ea55b5ddc88ca72a31fb85fa631a241a40157f5feffe43"
 dependencies = [
  "bindgen 0.59.2",
+ "cc",
+ "cmake",
+ "libc 0.2.151",
+ "libz-sys",
+ "pkg-config",
+ "walkdir",
+]
+
+[[package]]
+name = "grpcio-sys"
+version = "0.13.0+1.56.2-patched"
+source = "git+https://github.com/tikv/grpc-rs?branch=master#b82c9022a1d504396e61dedc122940ab7aeb96c8"
+dependencies = [
+ "bindgen 0.69.4",
  "cc",
  "cmake",
  "libc 0.2.151",
@@ -2842,10 +2889,10 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/pingcap/kvproto.git#d9297553c9009f569eaf4350f68a908f7811ee55"
+source = "git+https://github.com/glorv/kvproto?branch=grpc-master#b8d3a763f1aadf5fd602570849a4f34e554760b4"
 dependencies = [
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "protobuf",
  "protobuf-build",
  "raft-proto",
@@ -3687,7 +3734,7 @@ dependencies = [
  "error_code",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "kvproto",
  "lazy_static",
  "log",
@@ -4679,7 +4726,7 @@ dependencies = [
  "engine_traits",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "hex 0.4.2",
  "kvproto",
  "lazy_static",
@@ -4746,7 +4793,7 @@ dependencies = [
  "collections",
  "crossbeam",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "kvproto",
  "lazy_static",
  "libc 0.2.151",
@@ -5077,7 +5124,7 @@ version = "0.0.1"
 dependencies = [
  "collections",
  "encryption",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "kvproto",
  "serde",
  "serde_derive",
@@ -5297,7 +5344,7 @@ dependencies = [
  "file_system",
  "fs2",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "grpcio-health",
  "health_controller",
  "hex 0.4.2",
@@ -5510,7 +5557,7 @@ dependencies = [
  "engine_rocks",
  "engine_traits",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "itertools",
  "keys",
  "kvproto",
@@ -5590,7 +5637,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "futures-util",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "keys",
  "kvproto",
  "lazy_static",
@@ -5911,7 +5958,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-executor",
  "futures-util",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "kvproto",
  "protobuf",
  "raftstore",
@@ -5952,7 +5999,7 @@ dependencies = [
  "collections",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "kvproto",
  "log_wrappers",
  "pd_client",
@@ -5971,7 +6018,7 @@ dependencies = [
  "collections",
  "fail",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "keys",
  "kvproto",
  "log_wrappers",
@@ -6003,7 +6050,7 @@ dependencies = [
  "fail",
  "file_system",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "grpcio-health",
  "health_controller",
  "hybrid_engine",
@@ -6053,7 +6100,7 @@ dependencies = [
  "fail",
  "file_system",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "grpcio-health",
  "health_controller",
  "keys",
@@ -6103,7 +6150,7 @@ dependencies = [
  "engine_traits",
  "external_storage",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "keys",
  "kvproto",
  "tempfile",
@@ -6139,7 +6186,7 @@ dependencies = [
  "collections",
  "encryption_export",
  "fail",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "kvproto",
  "rand 0.8.5",
  "rand_isaac",
@@ -6178,7 +6225,7 @@ dependencies = [
  "fail",
  "file_system",
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "grpcio-health",
  "health_controller",
  "hyper",
@@ -6481,7 +6528,7 @@ dependencies = [
  "futures-util",
  "fxhash",
  "getset",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "grpcio-health",
  "health_controller",
  "hex 0.4.2",
@@ -6596,7 +6643,7 @@ dependencies = [
  "file_system",
  "futures 0.3.15",
  "gag",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "hex 0.4.2",
  "keys",
  "kvproto",
@@ -6756,7 +6803,7 @@ dependencies = [
  "futures 0.3.15",
  "futures-util",
  "gag",
- "grpcio",
+ "grpcio 0.13.0 (git+https://github.com/tikv/grpc-rs?branch=master)",
  "http",
  "kvproto",
  "lazy_static",
@@ -6858,7 +6905,7 @@ version = "0.0.1"
 source = "git+https://github.com/pingcap/tipb.git#87f5b80908ab561fb7875c88114488cad15727b1"
 dependencies = [
  "futures 0.3.15",
- "grpcio",
+ "grpcio 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf",
  "protobuf-build",
 ]
