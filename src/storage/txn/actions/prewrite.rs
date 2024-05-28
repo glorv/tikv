@@ -7,7 +7,7 @@ use fail::fail_point;
 use kvproto::kvrpcpb::{
     self, Assertion, AssertionLevel,
     PrewriteRequestPessimisticAction::{self, *},
-    WriteConflictReason,
+    write_conflict::Reason as WriteConflictReason,
 };
 use txn_types::{
     is_short_value, Key, LastChange, Mutation, MutationType, OldValue, TimeStamp, Value, Write,
@@ -646,7 +646,7 @@ impl<'a> PrewriteMutation<'a> {
         &self,
         write: &Write,
         commit_ts: TimeStamp,
-        reason: kvrpcpb::WriteConflictReason,
+        reason: kvrpcpb::write_conflict::Reason,
     ) -> Result<()> {
         Err(ErrorInner::WriteConflict {
             start_ts: self.txn_props.start_ts,

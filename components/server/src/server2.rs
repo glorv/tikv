@@ -45,7 +45,7 @@ use kvproto::{
     brpb::create_backup, cdcpb_grpc::create_change_data, deadlock::create_deadlock,
     debugpb_grpc::create_debug, diagnosticspb::create_diagnostics,
     import_sstpb_grpc::create_import_sst, kvrpcpb::ApiVersion, logbackuppb::create_log_backup,
-    resource_usage_agent::create_resource_metering_pub_sub,
+    resource_usage_agent::resource_metering_pub_sub_server::ResourceMeteringPubSubServer,
 };
 use pd_client::{
     meta_storage::{Checked, Sourced},
@@ -1083,7 +1083,7 @@ where
 
         if servers
             .server
-            .register_service(create_resource_metering_pub_sub(
+            .register_service(ResourceMeteringPubSubServer::new(
                 servers.rsmeter_pubsub_service.clone(),
             ))
             .is_some()

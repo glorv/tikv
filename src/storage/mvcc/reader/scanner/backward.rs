@@ -4,7 +4,7 @@
 use std::{borrow::Cow, cmp::Ordering};
 
 use engine_traits::CF_DEFAULT;
-use kvproto::kvrpcpb::{IsolationLevel, WriteConflictReason};
+use kvproto::kvrpcpb::{IsolationLevel, write_conflict::Reason as WriteConflictReason};
 use txn_types::{Key, Lock, TimeStamp, Value, Write, WriteRef, WriteType};
 
 use super::ScannerConfig;

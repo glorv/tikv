@@ -3,7 +3,7 @@
 use std::{borrow::Cow, mem::size_of};
 
 use byteorder::ReadBytesExt;
-use kvproto::kvrpcpb::{IsolationLevel, LockInfo, Op, WriteConflictReason};
+use kvproto::kvrpcpb::{IsolationLevel, LockInfo, Op, write_conflict::Reason as WriteConflictReason};
 use tikv_util::{
     codec::{
         bytes::{self, BytesEncoder},

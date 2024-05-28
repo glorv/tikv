@@ -11,7 +11,7 @@ use std::{
 
 use futures::SinkExt;
 use grpcio::{CallOption, ChannelBuilder, Environment, WriteFlags};
-use kvproto::resource_usage_agent::{ResourceUsageAgentClient, ResourceUsageRecord};
+use kvproto::resource_usage_agent::{resource_usage_agent_client::ResourceUsageAgentClient, ResourceUsageRecord};
 use tikv_util::{
     warn,
     worker::{Builder as WorkerBuilder, LazyWorker, Runnable, Scheduler},
@@ -49,7 +49,7 @@ pub struct SingleTargetDataSink {
     data_sink: Option<DataSinkGuard>,
 
     env: Arc<Environment>,
-    client: Option<ResourceUsageAgentClient>,
+    client: Option<ResourceUsageAgentClient<tonic::transport::Channel>>,
     limiter: Limiter,
 
     address: String,
@@ -98,23 +98,28 @@ impl SingleTargetDataSink {
 
         if self.client.is_none() {
             let channel = {
-                let cb = ChannelBuilder::new(self.env.clone())
-                    .keepalive_time(Duration::from_secs(10))
-                    .keepalive_timeout(Duration::from_secs(3));
-                cb.connect(&self.address)
+                tonic::transport::Channel::from_shared(self.address.as_bytes()).unwrap()
+                    .http2_keep_alive_interval(Duration::from_secs(10))
+                    .keep_alive_timeout(Duration::from_secs(3)).connect_lazy()
             };
             self.client = Some(ResourceUsageAgentClient::new(channel));
         }
 
         let client = self.client.as_ref().unwrap();
-        let call_opt = CallOption::default().timeout(Duration::from_secs(2));
-        let call = client.report_opt(call_opt);
-        if let Err(err) = &call {
-            IGNORED_DATA_COUNTER
+        match client.report(tokio_stream::iter(records.iter().map(|r| r.clone()))) {
+            Ok(f) => {},
+            Err(e) => {
+                IGNORED_DATA_COUNTER
                 .with_label_values(&["report"])
                 .inc_by(records.len() as _);
             warn!("failed to call report"; "err" => ?err);
             return;
+            }
+        }
+        let call_opt = CallOption::default().timeout(Duration::from_secs(2));
+        let call = client.report_opt(call_opt);
+        if let Err(err) = &call {
+            
         }
         let (mut tx, rx) = call.unwrap();
         client.spawn(async move {
