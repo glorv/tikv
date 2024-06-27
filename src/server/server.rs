@@ -146,7 +146,8 @@ pub struct Server<S: StoreAddrResolver + 'static, E: Engine> {
     /// A GrpcServer builder or a GrpcServer.
     ///
     /// If the listening port is configured, the server will be started lazily.
-    builder_or_server: Option<Either<ServerBuilderWithAddr, futures::channel::oneshot::Sender<()>>>,
+    builder_or_server:
+        Option<Either<ServerBuilderWithAddr, Vec<futures::channel::oneshot::Sender<()>>>>,
     grpc_mem_quota: ResourceQuota,
     local_addr: SocketAddr,
     // Transport.
@@ -348,12 +349,19 @@ where
         info!("listening on addr"; "addr" => &self.local_addr);
         let mut server_builder = self.builder_or_server.take().unwrap().left().unwrap();
         let addr = self.local_addr.clone();
-        let (tx, rx) = futures::channel::oneshot::channel::<()>();
-        let grpc_task = server_builder
-            .builder
-            .serve_with_shutdown(addr, rx.map(|_| ()));
-        let _ = self.grpc_handle.spawn(grpc_task);
-        self.builder_or_server = Some(Either::Right(tx));
+        const CONN_COUNT: usize = 5;
+        let mut txs = Vec::with_capacity(CONN_COUNT);
+        for _i in 0..CONN_COUNT {
+            let (tx, rx) = futures::channel::oneshot::channel::<()>();
+            let grpc_task = server_builder
+                .builder
+                .clone()
+                .serve_with_shutdown(addr, rx.map(|_| ()));
+            txs.push(tx);
+            let _ = self.grpc_handle.spawn(grpc_task);
+        }
+
+        self.builder_or_server = Some(Either::Right(txs));
         self.health_controller.set_is_serving(true);
     }
 
@@ -438,8 +446,10 @@ where
     /// Stops the TiKV server.
     pub fn stop(&mut self) -> Result<()> {
         self.snap_worker.stop();
-        if let Some(Either::Right(mut tx)) = self.builder_or_server.take() {
-            let _ = tx.send(());
+        if let Some(Either::Right(txs)) = self.builder_or_server.take() {
+            for tx in txs {
+                let _ = tx.send(());
+            }
         }
         if let Some(pool) = self.stats_pool.take() {
             pool.shutdown_background();
@@ -454,8 +464,10 @@ where
         // Prepare the builder for resume grpc server. And if the builder cannot be
         // created, then pause will be skipped.
         let builder = Either::Left(self.builder_factory.create_builder()?);
-        if let Some(Either::Right(tx)) = self.builder_or_server.take() {
-            let _ = tx.send(());
+        if let Some(Either::Right(txs)) = self.builder_or_server.take() {
+            for tx in txs {
+                let _ = tx.send(());
+            }
         }
         self.health_controller.set_is_serving(false);
         self.builder_or_server = Some(builder);
