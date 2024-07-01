@@ -350,8 +350,9 @@ where
         let mut server_builder = self.builder_or_server.take().unwrap().left().unwrap();
         let addr = self.local_addr.clone();
         const CONN_COUNT: usize = 5;
-        let mut txs = Vec::with_capacity(CONN_COUNT);
-        for _i in 0..CONN_COUNT {
+        let conn_count = std::cmp::max(((tikv_util::sys::SysQuota::cpu_cores_quota() / 8.0) as usize), 2);
+        let mut txs = Vec::with_capacity(conn_count);
+        for _i in 0..conn_count {
             let (tx, rx) = futures::channel::oneshot::channel::<()>();
             let grpc_task = server_builder
                 .builder
