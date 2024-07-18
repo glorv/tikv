@@ -332,6 +332,8 @@ pub struct Config {
     pub io_reschedule_concurrent_max_count: usize,
     pub io_reschedule_hotpot_duration: ReadableDuration,
 
+    pub io_flush_size_limit: ReadableSize,
+
     #[doc(hidden)]
     #[serde(skip_serializing)]
     #[online_config(hidden)]
@@ -519,6 +521,7 @@ impl Default for Config {
             waterfall_metrics: true,
             io_reschedule_concurrent_max_count: 4,
             io_reschedule_hotpot_duration: ReadableDuration::secs(5),
+            io_flush_size_limit: ReadableSize::kb(8),
             raft_msg_flush_interval: ReadableDuration::micros(250),
             reactive_memory_lock_tick_interval: ReadableDuration::secs(2),
             reactive_memory_lock_timeout_tick: 5,

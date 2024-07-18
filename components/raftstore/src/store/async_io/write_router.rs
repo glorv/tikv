@@ -23,7 +23,7 @@ use tikv_util::{
 };
 
 use crate::store::{
-    async_io::write::WriteMsg, config::Config, fsm::store::PollContext, local_metrics::RaftMetrics,
+    async_io::write::{WriteMsg, WriteTasks}, config::Config, fsm::store::PollContext, local_metrics::RaftMetrics,
     metrics::*,
 };
 
@@ -35,6 +35,7 @@ where
     ER: RaftEngine,
 {
     fn write_senders(&self) -> &WriteSenders<EK, ER>;
+    fn write_senders_mut(&mut self) -> &mut WriteSenders<EK, ER>;
     fn config(&self) -> &Config;
     fn raft_metrics(&self) -> &RaftMetrics;
 }
@@ -46,6 +47,10 @@ where
 {
     fn write_senders(&self) -> &WriteSenders<EK, ER> {
         &self.write_senders
+    }
+
+    fn write_senders_mut(&mut self) -> &mut WriteSenders<EK, ER> {
+        &mut self.write_senders
     }
 
     fn config(&self) -> &Config {
@@ -237,27 +242,13 @@ where
     }
 
     fn send<C: WriteRouterContext<EK, ER>>(&mut self, ctx: &mut C, msg: WriteMsg<EK, ER>) {
-        let sender = &ctx.write_senders()[self.writer_id];
-        sender.consume_msg_resource(&msg);
+        // let sender = &ctx.write_senders()[self.writer_id];
+        // sender.consume_msg_resource(&msg);
         // pass the priority of last msg as low bound to make sure all messages of one
         // peer are handled sequentially.
-        match sender.try_send(msg, self.last_msg_priority) {
-            // TODO: handle last msg priority properly
-            Ok(priority) => self.last_msg_priority = priority,
-            Err(TrySendError::Full(msg)) => {
-                let now = Instant::now();
-                if sender.send(msg, self.last_msg_priority).is_err() {
-                    // Write threads are destroyed after store threads during shutdown.
-                    safe_panic!("{} failed to send write msg, err: disconnected", self.tag);
-                }
-                ctx.raft_metrics()
-                    .write_block_wait
-                    .observe(now.saturating_elapsed_secs());
-            }
-            Err(TrySendError::Disconnected(_)) => {
-                // Write threads are destroyed after store threads during shutdown.
-                safe_panic!("{} failed to send write msg, err: disconnected", self.tag);
-            }
+        if let Err(_) = ctx.write_senders_mut().send(self.writer_id, msg, self.last_msg_priority) {
+            // Write threads are destroyed after store threads during shutdown.
+            safe_panic!("{} failed to send write msg, err: disconnected", self.tag);
         }
     }
 }
@@ -305,20 +296,66 @@ unsafe impl<EK: KvEngine, ER: RaftEngine> Sync for SharedSenders<EK, ER> {}
 
 /// Senders for asynchronous writes. There can be multiple senders, generally
 /// you should use `WriteRouter` to decide which sender to be used.
-#[derive(Clone)]
 pub struct WriteSenders<EK: KvEngine, ER: RaftEngine> {
     senders: Tracker<SharedSenders<EK, ER>>,
     cached_senders: Vec<Sender<WriteMsg<EK, ER>>>,
+    cached_tasks: Vec<WriteTasks<EK, ER>>,
     io_reschedule_concurrent_count: Arc<AtomicUsize>,
+}
+
+impl<EK: KvEngine, ER: RaftEngine> Clone for WriteSenders<EK, ER> {
+    fn clone(&self) -> Self {
+        let mut cached_tasks = Vec::with_capacity(self.cached_tasks.len());
+        for  _i in 0..self.cached_senders.len() {
+            cached_tasks.push(WriteTasks::new());
+        }
+        Self {
+            senders: self.senders.clone(),
+            cached_tasks,
+            cached_senders: self.cached_senders.clone(),
+            io_reschedule_concurrent_count: self.io_reschedule_concurrent_count.clone(),
+        }
+    }
 }
 
 impl<EK: KvEngine, ER: RaftEngine> WriteSenders<EK, ER> {
     pub fn new(senders: Arc<VersionTrack<SharedSenders<EK, ER>>>) -> Self {
         let cached_senders = senders.value().get();
+        let mut cached_tasks = Vec::with_capacity(cached_senders.len());
+        for  _i in 0..cached_senders.len() {
+            cached_tasks.push(WriteTasks::new());
+        }
+        
         WriteSenders {
             senders: senders.tracker("async writers' tracker".to_owned()),
             cached_senders,
+            cached_tasks,
             io_reschedule_concurrent_count: Arc::default(),
+        }
+    }
+
+    pub fn send(&mut self, index: usize, task: WriteMsg<EK, ER>, low_bound: Option<u64>) -> Result<Option<u64>, crossbeam::channel::SendError<WriteMsg<EK, ER>>> {
+        let task = self.cached_tasks[index].add(task);
+        let mut res = None;
+        if self.cached_tasks[index].should_flush() {
+            let cached_task = std::mem::replace(&mut self.cached_tasks[index], WriteTasks::new()); 
+            res = self.cached_senders[index].send(WriteMsg::WriteTasks(cached_task), low_bound)?;
+        }
+        if let Some(task) = task {
+            res = self.cached_senders[index].send(task, low_bound)?;
+        }
+        Ok(res)
+    }
+
+    pub fn flush(&mut self){
+        for i in 0..self.cached_senders.len() {
+            if !self.cached_tasks[i].is_empty() {
+                let cached_task = std::mem::replace(&mut self.cached_tasks[i], WriteTasks::new()); 
+                if let Err(_) = self.cached_senders[i].send(WriteMsg::WriteTasks(cached_task), None) {
+                    // Write threads are destroyed after store threads during shutdown.
+                    safe_panic!("failed to send write msg, err: disconnected");
+                }
+            }
         }
     }
 
@@ -336,6 +373,11 @@ impl<EK: KvEngine, ER: RaftEngine> WriteSenders<EK, ER> {
     pub fn refresh(&mut self) {
         if let Some(senders) = self.senders.any_new() {
             self.cached_senders = senders.get();
+        }
+        if self.cached_tasks.len() < self.cached_senders.len() {
+            for _i in 0..self.cached_senders.len()-self.cached_tasks.len() {
+                self.cached_tasks.push(WriteTasks::new());
+            }
         }
     }
 }

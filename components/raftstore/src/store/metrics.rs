@@ -794,6 +794,13 @@ lazy_static! {
         exponential_buckets(1.0, 2.0, 20).unwrap()
     ).unwrap();
 
+
+    pub static ref RAFT_ASYNC_IO_BATCH_FMS_SIZE: Histogram = register_histogram!(
+        "tikv_raft_aync_io_batch_fsm_size",
+        "Histogram of the async io send msg batch size",
+        exponential_buckets(1.0, 2.0, 10).unwrap()
+    ).unwrap();
+
     pub static ref RAFT_ENABLE_UNPERSISTED_APPLY_GAUGE: IntGauge = register_int_gauge!(
         "tikv_raft_enable_unpersisted_apply_regions",
         "The number of regions that disable apply unpersisted raft log."

@@ -274,6 +274,7 @@ where
     ER: RaftEngine,
 {
     WriteTask(WriteTask<EK, ER>),
+    WriteTasks(WriteTasks<EK, ER>),
     LatencyInspect {
         send_time: Instant,
         inspector: Vec<LatencyInspector>,
@@ -281,6 +282,60 @@ where
     Shutdown,
     #[cfg(test)]
     Pause(std::sync::mpsc::Receiver<()>),
+}
+
+#[derive(Default)]
+pub struct WriteTasks<EK, ER>
+where
+    EK: KvEngine,
+    ER: RaftEngine, 
+{
+    tasks: Vec<WriteTask<EK, ER>>,
+    inspectors: Vec<(Instant, Vec<LatencyInspector>)>,
+    total_size: usize
+}
+
+impl<EK, ER> WriteTasks<EK, ER>
+where
+    EK: KvEngine,
+    ER: RaftEngine, 
+{
+    pub fn new() -> Self {
+        Self {
+            tasks: vec![],
+            inspectors: vec![],
+            total_size: 0,
+        }
+    }
+
+    pub fn add(&mut self, t: WriteMsg<EK, ER>) -> Option<WriteMsg<EK, ER>> {
+        match t {
+            WriteMsg::WriteTask(t) => {
+                let mut size = 0;
+                for e in &t.entries {
+                    size += e.compute_size();
+                }
+                self.total_size += size as usize;
+                self.tasks.push(t);
+
+            }
+            WriteMsg::LatencyInspect { send_time, inspector } => {
+                self.inspectors.push((send_time, inspector));
+            }
+            _ => {
+                return Some(t);
+            }
+        }
+        None
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tasks.is_empty() && self.inspectors.is_empty()
+    }
+
+    pub fn should_flush(&self) -> bool {
+        self.total_size >= 32768
+    }
 }
 
 impl<EK, ER> ResourceMetered for WriteMsg<EK, ER>
@@ -327,6 +382,11 @@ where
                 fmt,
                 "WriteMsg::WriteTask(region_id {} peer_id {} ready_number {})",
                 t.region_id, t.peer_id, t.ready_number
+            ),
+            WriteMsg::WriteTasks(t) => write!(
+                fmt,
+                "WriteMsg::WriteTasks(count: {}, total_size: {})",
+                t.tasks.len(), t.total_size,
             ),
             WriteMsg::Shutdown => write!(fmt, "WriteMsg::Shutdown"),
             WriteMsg::LatencyInspect { .. } => write!(fmt, "WriteMsg::LatencyInspect"),
@@ -690,6 +750,15 @@ where
                     .task_wait
                     .observe(duration_to_sec(task.send_time.saturating_elapsed()));
                 self.handle_write_task(task);
+            }
+            WriteMsg::WriteTasks(WriteTasks { tasks, inspectors, .. }) => {
+                RAFT_ASYNC_IO_BATCH_FMS_SIZE.observe(tasks.len() as f64);
+                for task in tasks {
+                    self.handle_write_task(task);
+                }
+                for i in inspectors {
+                    self.pending_latency_inspect.push(i);
+                }
             }
             WriteMsg::LatencyInspect {
                 send_time,

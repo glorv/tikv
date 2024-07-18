@@ -1121,6 +1121,8 @@ impl<EK: KvEngine, ER: RaftEngine, T: Transport> PollHandler<PeerFsm<EK, ER>, St
 
             self.flush_events();
         } else {
+            self.poll_ctx.write_senders.flush();
+
             let now = TiInstant::now();
 
             if self.poll_ctx.trans.need_flush() {

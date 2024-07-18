@@ -213,6 +213,10 @@ where
         &self.schedulers.write
     }
 
+    fn write_senders_mut(&mut self) -> &mut WriteSenders<EK, ER> {
+        &mut self.schedulers.write
+    }
+
     fn config(&self) -> &Config {
         &self.cfg
     }
