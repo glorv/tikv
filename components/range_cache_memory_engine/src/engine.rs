@@ -464,7 +464,7 @@ impl RangeCacheEngine for RangeCacheMemoryEngine {
     }
 
     fn enabled(&self) -> bool {
-        self.config.value().enabled
+        self.config.value().enabled && self.core.region_manager().is_active()
     }
 
     fn on_region_event(&self, event: RegionEvent) {

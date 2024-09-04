@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use engine_traits::{
-    is_data_cf, CacheRegion, KvEngine, Mutable, Result, WriteBatch, WriteBatchExt, WriteOptions,
+    is_data_cf, CacheRegion, KvEngine, Mutable, Result, WriteBatch, WriteBatchExt, WriteOptions, RangeCacheEngine,
 };
 use range_cache_memory_engine::{RangeCacheMemoryEngine, RangeCacheWriteBatch};
 
@@ -11,7 +11,7 @@ use crate::engine::HybridEngine;
 
 pub struct HybridEngineWriteBatch<EK: KvEngine> {
     disk_write_batch: EK::WriteBatch,
-    pub(crate) cache_write_batch: RangeCacheWriteBatch,
+    pub(crate) cache_write_batch: Option<RangeCacheWriteBatch>,
 }
 
 impl<EK> WriteBatchExt for HybridEngine<EK, RangeCacheMemoryEngine>
@@ -22,16 +22,26 @@ where
     const WRITE_BATCH_MAX_KEYS: usize = EK::WRITE_BATCH_MAX_KEYS;
 
     fn write_batch(&self) -> Self::WriteBatch {
+        let cache_write_batch = if self.range_cache_engine().enabled() {
+            Some(self.range_cache_engine().write_batch())
+        } else {
+            None
+        };
         HybridEngineWriteBatch {
             disk_write_batch: self.disk_engine().write_batch(),
-            cache_write_batch: self.range_cache_engine().write_batch(),
+            cache_write_batch,
         }
     }
 
     fn write_batch_with_cap(&self, cap: usize) -> Self::WriteBatch {
+        let cache_write_batch = if self.range_cache_engine().enabled() {
+            Some(self.range_cache_engine().write_batch_with_cap(cap))
+        } else {
+            None
+        };
         HybridEngineWriteBatch {
             disk_write_batch: self.disk_engine().write_batch_with_cap(cap),
-            cache_write_batch: self.range_cache_engine().write_batch_with_cap(cap),
+            cache_write_batch,
         }
     }
 }
@@ -47,15 +57,19 @@ impl<EK: KvEngine> WriteBatch for HybridEngineWriteBatch<EK> {
             .disk_write_batch
             .write_callback_opt(opts, |s| {
                 if !called.fetch_or(true, Ordering::SeqCst) {
-                    self.cache_write_batch.set_sequence_number(s).unwrap();
-                    self.cache_write_batch.write_opt(opts).unwrap();
+                    if let Some(wb) = &mut self.cache_write_batch {
+                        wb.set_sequence_number(s).unwrap();
+                        wb.write_opt(opts).unwrap();
+                    }
                 }
             })
             .map(|s| {
                 cb(s);
                 s
             });
-        self.cache_write_batch.maybe_compact_lock_cf();
+            if let Some(wb) = &mut self.cache_write_batch {
+                wb.maybe_compact_lock_cf();
+            }
         res
     }
 
@@ -77,63 +91,91 @@ impl<EK: KvEngine> WriteBatch for HybridEngineWriteBatch<EK> {
 
     fn clear(&mut self) {
         self.disk_write_batch.clear();
-        self.cache_write_batch.clear()
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.clear();
+        }
     }
 
     fn set_save_point(&mut self) {
         self.disk_write_batch.set_save_point();
-        self.cache_write_batch.set_save_point()
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.set_save_point();
+        }
     }
 
     fn pop_save_point(&mut self) -> Result<()> {
         self.disk_write_batch.pop_save_point()?;
-        self.cache_write_batch.pop_save_point()
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.pop_save_point()?;
+        }
+        Ok(())
     }
 
     fn rollback_to_save_point(&mut self) -> Result<()> {
         self.disk_write_batch.rollback_to_save_point()?;
-        self.cache_write_batch.rollback_to_save_point()
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.rollback_to_save_point()?;
+        }
+        Ok(())
     }
 
     fn merge(&mut self, other: Self) -> Result<()> {
         self.disk_write_batch.merge(other.disk_write_batch)?;
-        self.cache_write_batch.merge(other.cache_write_batch)
+        if let Some(wb) = &mut self.cache_write_batch &&
+            let Some(ob) = other.cache_write_batch {
+            wb.merge(ob)?;
+        }
+        Ok(())
     }
 
     fn prepare_for_region(&mut self, r: CacheRegion) {
-        self.cache_write_batch.prepare_for_region(r);
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.prepare_for_region(r);
+        }
     }
 }
 
 impl<EK: KvEngine> Mutable for HybridEngineWriteBatch<EK> {
     fn put(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
         self.disk_write_batch.put(key, value)?;
-        self.cache_write_batch.put(key, value)
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.put(key, value)?;
+        }
+        Ok(())
     }
 
     fn put_cf(&mut self, cf: &str, key: &[u8], value: &[u8]) -> Result<()> {
         self.disk_write_batch.put_cf(cf, key, value)?;
-        if is_data_cf(cf) {
-            self.cache_write_batch.put_cf(cf, key, value)?;
+        if let Some(wb) = &mut self.cache_write_batch && is_data_cf(cf) {
+            wb.put_cf(cf, key, value)?;
         }
         Ok(())
     }
 
     fn delete(&mut self, key: &[u8]) -> Result<()> {
         self.disk_write_batch.delete(key)?;
-        self.cache_write_batch.delete(key)
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.delete(key)?;
+        }
+        Ok(())
     }
 
     fn delete_cf(&mut self, cf: &str, key: &[u8]) -> Result<()> {
         self.disk_write_batch.delete_cf(cf, key)?;
-        self.cache_write_batch.delete_cf(cf, key)
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.delete_cf(cf, key)?;
+        }
+        Ok(())
     }
 
     fn delete_range(&mut self, begin_key: &[u8], end_key: &[u8]) -> Result<()> {
         self.disk_write_batch.delete_range(begin_key, end_key)?;
         // delete_range in range cache engine means eviction -- all ranges overlapped
         // with [begin_key, end_key] will be evicted.
-        self.cache_write_batch.delete_range(begin_key, end_key)
+        if let Some(wb) = &mut self.cache_write_batch {
+            wb.delete_range(begin_key, end_key)?;
+        }
+        Ok(())
     }
 
     fn delete_range_cf(&mut self, cf: &str, begin_key: &[u8], end_key: &[u8]) -> Result<()> {
@@ -141,8 +183,10 @@ impl<EK: KvEngine> Mutable for HybridEngineWriteBatch<EK> {
             .delete_range_cf(cf, begin_key, end_key)?;
         // delete_range in range cache engine means eviction -- all ranges overlapped
         // with [begin_key, end_key] will be evicted.
-        self.cache_write_batch
-            .delete_range_cf(cf, begin_key, end_key)
+        if let Some(wb) = &mut self.cache_write_batch {
+                wb.delete_range_cf(cf, begin_key, end_key)?;
+        }
+        Ok(())
     }
 }
 
