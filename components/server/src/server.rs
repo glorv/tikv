@@ -1645,28 +1645,24 @@ where
         let range_cache_engine_context =
             RangeCacheEngineContext::new(range_cache_engine_config.clone(), self.pd_client.clone());
         let range_cache_engine_statistics = range_cache_engine_context.statistics();
-        let in_memory_engine = if self.core.config.range_cache_engine.enabled {
-            let in_memory_engine = build_hybrid_engine(
-                range_cache_engine_context,
-                kv_engine.clone(),
-                Some(self.pd_client.clone()),
-                Some(Arc::new(self.region_info_accessor.clone())),
-            );
 
-            // Hybrid engine observer.
-            let eviction_observer = HybridEngineObserver::new(Arc::new(in_memory_engine.clone()));
-            eviction_observer.register_to(self.coprocessor_host.as_mut().unwrap());
-            let write_batch_observer =
-                RegionCacheWriteBatchObserver::new(in_memory_engine.range_cache_engine().clone());
-            write_batch_observer.register_to(self.coprocessor_host.as_mut().unwrap());
-            let snapshot_observer =
-                HybridSnapshotObserver::new(in_memory_engine.range_cache_engine().clone());
-            snapshot_observer.register_to(self.coprocessor_host.as_mut().unwrap());
+       // init in-memory-engine by default. 
+        let in_memory_engine = build_hybrid_engine(
+            range_cache_engine_context,
+            kv_engine.clone(),
+            Some(self.pd_client.clone()),
+            Some(Arc::new(self.region_info_accessor.clone())),
+        );
+        // Hybrid engine observer.
+        let eviction_observer = HybridEngineObserver::new(Arc::new(in_memory_engine.clone()));
+        eviction_observer.register_to(self.coprocessor_host.as_mut().unwrap());
+        let write_batch_observer =
+            RegionCacheWriteBatchObserver::new(in_memory_engine.range_cache_engine().clone());
+        write_batch_observer.register_to(self.coprocessor_host.as_mut().unwrap());
+        let snapshot_observer =
+            HybridSnapshotObserver::new(in_memory_engine.range_cache_engine().clone());
+        snapshot_observer.register_to(self.coprocessor_host.as_mut().unwrap());
 
-            Some(in_memory_engine)
-        } else {
-            None
-        };
         let range_cache_config_manager = RangeCacheConfigManager(range_cache_engine_config);
         self.kv_statistics = Some(factory.rocks_statistics());
         self.range_cache_engine_statistics = Some(range_cache_engine_statistics);
@@ -1703,7 +1699,7 @@ where
             180, // max_samples_to_preserve
         ));
 
-        (engines, engines_info, in_memory_engine)
+        (engines, engines_info, Some(in_memory_engine))
     }
 }
 
