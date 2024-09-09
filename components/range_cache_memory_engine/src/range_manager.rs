@@ -298,11 +298,30 @@ impl RegionManager {
     }
 
     fn new_region_meta(&mut self, meta: CacheRegionMeta) {
-        assert!(!self.overlaps_with(&meta.region));
+        assert!(!self.check_overlap_with(&meta));
         let id = meta.region.id;
         let data_end_key = meta.region.end.clone();
-        self.regions.insert(id, meta);
-        self.regions_by_range.insert(data_end_key, id);
+        let old = self.regions.insert(id, meta);
+        assert!(old.is_none(), "old region: {:?}", old);
+        let prev_id = self.regions_by_range.insert(data_end_key, id);
+        assert!(prev_id.is_none(), "prev region id: {:?}", prev_id);
+    }
+
+    fn check_overlap_with(&self, meta: &CacheRegionMeta) -> bool {
+        let mut is_overlap = false;
+        for rg in self.regions.values() {
+            if rg.region.overlaps(&meta.region) {
+                is_overlap = true;
+                break;
+            }
+        }
+        if is_overlap {
+            tikv_util::error!("unexpected overlap"; 
+                "regions" => ?&self.regions, 
+                "regions_by_range" => ?&self.regions_by_range,
+                "new_meta" => ?meta);
+        }
+        is_overlap
     }
 
     pub fn region_meta(&self, id: u64) -> Option<&CacheRegionMeta> {
@@ -439,7 +458,7 @@ impl RegionManager {
                 removed_regions.push(region_meta.region.id);
                 return true;
             }
-            warn!("ime load region overlaps with existing region";
+            tikv_util::debug!("ime load region overlaps with existing region";
                 "region" => ?region,
                 "exist_meta" => ?region_meta);
             overlapped_region_state = Some(region_meta.state);
