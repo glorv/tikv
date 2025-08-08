@@ -38,6 +38,7 @@ impl CompactExt for RocksEngine {
         // concurrently run with other background compactions.
         compact_opts.set_exclusive_manual_compaction(option.exclusive_manual);
         compact_opts.set_max_subcompactions(option.max_subcompactions as i32);
+        compact_opts.set_bottom_level_range_overlap(true);
         if option.bottommost_level_force {
             compact_opts.set_bottommost_level_compaction(DBBottommostLevelCompaction::Force);
         }

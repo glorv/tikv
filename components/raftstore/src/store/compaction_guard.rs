@@ -1,6 +1,6 @@
 // Copyright 2020 TiKV Project Authors. Licensed under Apache-2.0.
 
-use std::ffi::CString;
+use std::{ffi::CString, sync::{Arc, RwLock}, time::Duration};
 
 use engine_traits::{
     CF_DEFAULT, CF_LOCK, CF_RAFT, CF_WRITE, CfName, SstPartitioner, SstPartitionerContext,
@@ -8,7 +8,7 @@ use engine_traits::{
 };
 use keys::{data_end_key, origin_key};
 use lazy_static::lazy_static;
-use tikv_util::warn;
+use tikv_util::{warn, time::Instant};
 
 use super::metrics::*;
 use crate::{Error, Result, coprocessor::RegionInfoProvider};
@@ -19,11 +19,102 @@ lazy_static! {
     static ref COMPACTION_GUARD: CString = CString::new(b"CompactionGuard".to_vec()).unwrap();
 }
 
+#[derive(Eq, PartialEq, PartialOrd, Clone)]
+struct TtlRange {
+    start: Vec<u8>,
+    end: Vec<u8>,
+    ttl: Instant,
+}
+
+impl std::fmt::Debug for TtlRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Range({:?}, {:?})", log_wrappers::Value(&self.start), log_wrappers::Value(&self.end))
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct ForcePartitionRangeManager {
+    force_partition_ranges: Arc<RwLock<Vec<TtlRange>>>,
+}
+
+impl ForcePartitionRangeManager {
+    pub fn add_range(&self, start: Vec<u8>, end: Vec<u8>, ttl: u64) -> bool {
+        let mut ranges = self.force_partition_ranges.write().unwrap();
+        for r in &*ranges {
+            if r.start == start && r.end == end {
+                return false;
+            }
+        }
+        ranges.push(TtlRange {
+            start,
+            end,
+            ttl: Instant::now_coarse() + Duration::from_secs(ttl),
+        });
+        true
+    }
+
+    pub fn remove_range(&self, start: &[u8], end: &[u8]) -> bool {
+        let mut ranges = self.force_partition_ranges.write().unwrap();
+        let mut removed = false;
+        ranges.retain(|r| {
+            let ne = r.start != start || r.end != end;
+            if !ne {
+                removed = true;
+            }
+            ne
+        });
+        removed
+    }
+
+    fn get_overlapped_ranges(&self, start: &[u8], end: &[u8]) -> Vec<TtlRange> {
+        let mut ranges = vec![];
+        let now = Instant::now_coarse();
+        let mut clean = false;
+        for rg in &*self.force_partition_ranges.read().unwrap() {
+            if rg.ttl < now {
+                clean = true;
+                continue;
+            }
+            if *rg.start < *end && *rg.end > *start {
+                ranges.push(rg.clone());
+            }
+        }
+        if clean {
+            self.remove_outdated_ranges();
+        }
+        ranges
+    }
+
+    fn remove_outdated_ranges(&self) {
+        let now = Instant::now_coarse();
+        self.force_partition_ranges.write().unwrap().retain(|r| {
+            r.ttl > now
+        });
+    }
+
+    pub fn iter_all_ranges(&self, mut func: impl FnMut(&[u8], &[u8], u64)) {
+        let now = Instant::now_coarse();
+        let mut need_clean = false;
+        self.force_partition_ranges.read().unwrap().iter().for_each(|r| {
+            let ttl = r.ttl.saturating_duration_since(now);
+            if ttl == Duration::ZERO {
+                need_clean = true;
+                return;
+            }
+            func(&r.start, &r.end, ttl.as_secs());
+        });
+        if need_clean {
+            self.remove_outdated_ranges();
+        }
+    }
+}
+
 pub struct CompactionGuardGeneratorFactory<P: RegionInfoProvider> {
     cf_name: CfNames,
     provider: P,
     min_output_file_size: u64,
     max_compaction_size: u64,
+    partition_range_mgr: ForcePartitionRangeManager,
 }
 
 impl<P: RegionInfoProvider> CompactionGuardGeneratorFactory<P> {
@@ -32,6 +123,7 @@ impl<P: RegionInfoProvider> CompactionGuardGeneratorFactory<P> {
         provider: P,
         min_output_file_size: u64,
         max_compaction_size: u64,
+        partition_range_mgr: ForcePartitionRangeManager,
     ) -> Result<Self> {
         let cf_name = match cf {
             CF_DEFAULT => CfNames::default,
@@ -50,6 +142,7 @@ impl<P: RegionInfoProvider> CompactionGuardGeneratorFactory<P> {
             provider,
             min_output_file_size,
             max_compaction_size,
+            partition_range_mgr,
         })
     }
 }
@@ -66,6 +159,8 @@ impl<P: RegionInfoProvider + Clone + 'static> SstPartitionerFactory
     }
 
     fn create_partitioner(&self, context: &SstPartitionerContext<'_>) -> Option<Self::Partitioner> {
+        let force_partition_ranges = self.partition_range_mgr.get_overlapped_ranges(context.smallest_key, context.largest_key);
+
         // create_partitioner can be called in RocksDB while holding db_mutex. It can
         // block other operations on RocksDB. To avoid such cases, we defer
         // region info query to the first time should_partition is called.
@@ -88,6 +183,7 @@ impl<P: RegionInfoProvider + Clone + 'static> SstPartitionerFactory
             next_level_size: context.next_level_sizes.clone(),
             current_next_level_size: 0,
             max_compaction_size: self.max_compaction_size,
+            force_partition_ranges,
         })
     }
 }
@@ -116,6 +212,7 @@ pub struct CompactionGuardGenerator<P: RegionInfoProvider> {
     next_level_pos: usize,
     current_next_level_size: u64,
     max_compaction_size: u64,
+    force_partition_ranges: Vec<TtlRange>,
 }
 
 impl<P: RegionInfoProvider> CompactionGuardGenerator<P> {
@@ -174,6 +271,27 @@ impl<P: RegionInfoProvider> CompactionGuardGenerator<P> {
     }
 }
 
+fn overlap_with(ranges: &[TtlRange], last_key: &[u8], next_key: &[u8]) -> bool {
+    assert!(last_key < next_key);
+    if ranges.is_empty() {
+        return false;
+    }
+    let mut left_index: isize = -1;
+    for i in 0..ranges.len() {
+        if *last_key < *ranges[i].end {
+            left_index = i as isize;
+            break;
+        } else if i == ranges.len() - 1 {
+            return false;
+        }
+    }
+    let check_idx = left_index.max(0) as usize;
+    if *next_key > *ranges[check_idx].start {
+        return true;
+    }
+    false
+}
+
 impl<P: RegionInfoProvider> SstPartitioner for CompactionGuardGenerator<P> {
     fn should_partition(&mut self, req: &SstPartitionerRequest<'_>) -> SstPartitionerResult {
         if !self.initialized {
@@ -211,6 +329,7 @@ impl<P: RegionInfoProvider> SstPartitioner for CompactionGuardGenerator<P> {
             if req.current_output_file_size >= self.min_output_file_size
                 // Or, the output file may make a huge compaction even greater than the max compaction size.
                 || self.current_next_level_size >= self.max_compaction_size
+                || overlap_with(&self.force_partition_ranges, req.prev_user_key, req.current_user_key)
             {
                 COMPACTION_GUARD_ACTION_COUNTER
                     .get(self.cf_name)
@@ -228,6 +347,27 @@ impl<P: RegionInfoProvider> SstPartitioner for CompactionGuardGenerator<P> {
                 // greater than the `max-sst-size`, which is tiny comparing to the
                 // `max-compaction-size` usually.
                 self.current_next_level_size = 0;
+                if req.current_output_file_size < self.min_output_file_size {
+                    let last_pos = if self.pos > 0 {
+                        self.boundaries[self.pos].as_slice()
+                    } else {
+                        &[]
+                    };
+                    let next_pos = if self.pos > 0 && self.pos < self.boundaries.len() -1 {
+                        self.boundaries[self.pos+1].as_slice()
+                    } else {
+                        &[]
+                    };
+
+                    tikv_util::info!("sst partition due to force partition ranges"; 
+                        "prev_key" => ?log_wrappers::Value(req.prev_user_key),
+                        "next_key" => ?log_wrappers::Value(req.current_user_key),
+                        "last_pos" => ?log_wrappers::Value(last_pos),
+                        "cur_pos" => ?log_wrappers::Value(self.boundaries[self.pos].as_slice()),
+                        "next_pos" => ?log_wrappers::Value(next_pos),
+                        "check_ranges" => ?&self.force_partition_ranges,
+                    );
+                }
                 SstPartitionerResult::Required
             } else {
                 COMPACTION_GUARD_ACTION_COUNTER
